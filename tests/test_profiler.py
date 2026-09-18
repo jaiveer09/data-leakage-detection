@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from modules.profiler import profile_dataset
+from modules.profiler import profile_dataset, get_column_statistics
 
 
 def test_basic_dataset_profile():
@@ -101,3 +101,50 @@ def test_empty_dataframe():
 def test_invalid_input():
     with pytest.raises(ValueError, match="pandas DataFrame"):
         profile_dataset(["not", "a", "dataframe"], "target")
+
+def test_numerical_statistics():
+    df = pd.DataFrame(
+        {
+            "age": [20, 30, 40],
+            "target": [0, 1, 0],
+        }
+    )
+
+    stats = get_column_statistics(df)
+
+    assert stats["numerical"]["age"]["count"] == 3
+    assert stats["numerical"]["age"]["mean"] == 30.0
+    assert stats["numerical"]["age"]["median"] == 30.0
+    assert stats["numerical"]["age"]["min"] == 20.0
+    assert stats["numerical"]["age"]["max"] == 40.0
+
+
+def test_categorical_statistics():
+    df = pd.DataFrame(
+        {
+            "city": ["Fullerton", "Anaheim", "Fullerton"],
+            "target": [0, 1, 0],
+        }
+    )
+
+    stats = get_column_statistics(df)
+
+    assert stats["categorical"]["city"]["count"] == 3
+    assert stats["categorical"]["city"]["unique"] == 2
+    assert stats["categorical"]["city"]["most_frequent"] == "Fullerton"
+
+
+def test_statistics_with_missing_values():
+    df = pd.DataFrame(
+        {
+            "age": [20, None, 40],
+            "city": ["Fullerton", None, "Anaheim"],
+        }
+    )
+
+    stats = get_column_statistics(df)
+
+    assert stats["numerical"]["age"]["count"] == 2
+    assert stats["numerical"]["age"]["mean"] == 30.0
+    assert stats["categorical"]["city"]["count"] == 2
+    assert stats["categorical"]["city"]["unique"] == 2

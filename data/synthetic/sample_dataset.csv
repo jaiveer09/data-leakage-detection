@@ -1,0 +1,6 @@
+age,income,city,date,customer_id,target
+25,50000,Fullerton,2026-01-01,101,0
+35,70000,Anaheim,2026-01-02,102,1
+45,90000,Irvine,2026-01-03,103,0
+30,60000,Fullerton,2026-01-04,104,1
+40,80000,Anaheim,2026-01-05,105,0

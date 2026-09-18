@@ -1,4 +1,176 @@
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
 import streamlit as st
 
+from modules.data_loader import load_csv, validate_columns
+from modules.profiler import profile_dataset
+from modules.config import create_config
+from modules.profiler import profile_dataset, get_column_statistics
+
+
+st.set_page_config(
+    page_title="Data Leakage Detection System",
+    layout="wide",
+)
+
 st.title("Data Leakage Detection System")
-st.write("Development environment is working successfully.")
+st.write(
+    "Upload a CSV dataset and configure the columns that will be used "
+    "for leakage analysis."
+)
+
+uploaded_file = st.file_uploader(
+    "Upload CSV Dataset",
+    type=["csv"],
+)
+
+if uploaded_file is not None:
+    try:
+        df = load_csv(uploaded_file)
+
+        st.success("Dataset loaded successfully.")
+
+        st.subheader("Dataset Preview")
+        st.dataframe(df.head())
+
+        columns = df.columns.tolist()
+
+        st.subheader("Column Configuration")
+
+        target_column = st.selectbox(
+            "Target / Label Column",
+            options=columns,
+        )
+
+        optional_columns = ["None"] + columns
+
+        timestamp_selection = st.selectbox(
+            "Timestamp Column (Required for Time-Based Split)",
+            options=optional_columns,
+        )
+
+        group_selection = st.selectbox(
+            "Group / Entity Column (Required for Group-Based Split)",
+            options=optional_columns,
+        )
+
+        timestamp_column = (
+            None
+            if timestamp_selection == "None"
+            else timestamp_selection
+        )
+
+        group_column = (
+            None
+            if group_selection == "None"
+            else group_selection
+        )
+        
+        st.subheader("Evaluation Configuration")
+
+        split_type = st.selectbox(
+            "Split Type",
+            options=["random", "time", "group"],
+        )
+
+        test_size = st.slider(
+            "Test Size",
+            min_value=0.1,
+            max_value=0.5,
+            value=0.2,
+            step=0.05,
+        )
+
+        cv_folds = st.number_input(
+            "Cross-Validation Folds",
+            min_value=2,
+            max_value=10,
+            value=5,
+            step=1,
+        )
+
+        if st.button("Analyze Dataset"):
+            try:
+                validate_columns(
+                    df,
+                    target_column,
+                    timestamp_column,
+                    group_column,
+                )
+                
+                config = create_config(
+                target_column=target_column,
+                timestamp_column=timestamp_column,
+                group_column=group_column,
+                split_type=split_type,
+                test_size=test_size,
+                cv_folds=int(cv_folds),
+                )
+
+                statistics = get_column_statistics(df)
+
+                profile = profile_dataset(
+                    df,
+                    target_column,
+                )
+
+                st.subheader("Dataset Profile")
+
+                col1, col2, col3 = st.columns(3)
+
+                col1.metric("Rows", profile["rows"])
+                col2.metric("Columns", profile["columns"])
+                col3.metric(
+                    "Duplicate Rows",
+                    profile["duplicate_rows"],
+                )
+
+                st.write("**Column Data Types**")
+                st.json(profile["data_types"])
+
+                st.write("**Missing Values**")
+                st.json(profile["missing_values"])
+
+                st.write(
+                    "**Numerical Columns:**",
+                    profile["numerical_columns"],
+                )
+
+                st.write(
+                    "**Categorical Columns:**",
+                    profile["categorical_columns"],
+                )
+
+                st.write(
+                    "**Target Unique Values:**",
+                    profile["target_unique_values"],
+                )
+
+                st.write(
+                    "**Target Missing Values:**",
+                    profile["target_missing_values"],
+                )
+                
+                st.subheader("Evaluation Settings")
+
+                st.write("**Split Type:**", config["split_type"])
+                st.write("**Test Size:**", config["test_size"])
+                st.write("**Cross-Validation Folds:**", config["cv_folds"])
+
+                st.subheader("Column Statistics")
+
+                st.write("**Numerical Statistics**")
+                st.json(statistics["numerical"])
+
+                st.write("**Categorical Statistics**")
+                st.json(statistics["categorical"])
+
+            except ValueError as e:
+                st.error(str(e))
+
+    except ValueError as e:
+        st.error(str(e))

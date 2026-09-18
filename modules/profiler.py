@@ -35,3 +35,42 @@ def profile_dataset(df, target_column):
     }
 
     return profile
+
+def get_column_statistics(df):
+    numerical_stats = {}
+    categorical_stats = {}
+
+    numerical_columns = df.select_dtypes(include="number").columns
+    categorical_columns = df.select_dtypes(
+        include=["object", "category", "string"]
+    ).columns
+
+    for column in numerical_columns:
+        series = df[column]
+
+        numerical_stats[column] = {
+            "count": int(series.count()),
+            "mean": float(series.mean()) if series.count() > 0 else None,
+            "median": float(series.median()) if series.count() > 0 else None,
+            "std": float(series.std()) if series.count() > 1 else None,
+            "min": float(series.min()) if series.count() > 0 else None,
+            "max": float(series.max()) if series.count() > 0 else None,
+        }
+
+    for column in categorical_columns:
+        series = df[column]
+
+        categorical_stats[column] = {
+            "count": int(series.count()),
+            "unique": int(series.nunique(dropna=True)),
+            "most_frequent": (
+                series.mode().iloc[0]
+                if not series.mode().empty
+                else None
+            ),
+        }
+
+    return {
+        "numerical": numerical_stats,
+        "categorical": categorical_stats,
+    }
