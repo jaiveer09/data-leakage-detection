@@ -10,6 +10,7 @@ from modules.data_loader import load_csv, validate_columns
 from modules.profiler import profile_dataset
 from modules.config import create_config
 from modules.profiler import profile_dataset, get_column_statistics
+from modules.split_validator import validate_split_configuration
 
 
 st.set_page_config(
@@ -111,6 +112,11 @@ if uploaded_file is not None:
                 cv_folds=int(cv_folds),
                 )
 
+                split_validation = validate_split_configuration(
+                    df,
+                    config,
+                )
+
                 statistics = get_column_statistics(df)
 
                 profile = profile_dataset(
@@ -160,6 +166,52 @@ if uploaded_file is not None:
                 st.write("**Split Type:**", config["split_type"])
                 st.write("**Test Size:**", config["test_size"])
                 st.write("**Cross-Validation Folds:**", config["cv_folds"])
+                
+                st.subheader("Split Validation")
+
+                st.success("Split configuration is valid.")
+
+                if split_validation["split_type"] == "random":
+                    st.write(
+                        "**Estimated Training Rows:**",
+                        split_validation["train_rows"],
+                    )
+                    st.write(
+                        "**Estimated Testing Rows:**",
+                        split_validation["test_rows"],
+                    )
+
+                elif split_validation["split_type"] == "time":
+                    st.write(
+                        "**Timestamp Column:**",
+                        split_validation["timestamp_column"],
+                    )
+                    st.write(
+                        "**Estimated Training Rows:**",
+                        split_validation["train_rows"],
+                    )
+                    st.write(
+                        "**Estimated Testing Rows:**",
+                        split_validation["test_rows"],
+                    )
+                    st.write(
+                        "**Earliest Timestamp:**",
+                        split_validation["earliest_timestamp"],
+                    )
+                    st.write(
+                        "**Latest Timestamp:**",
+                        split_validation["latest_timestamp"],
+                    )
+
+                elif split_validation["split_type"] == "group":
+                    st.write(
+                        "**Group Column:**",
+                        split_validation["group_column"],
+                    )
+                    st.write(
+                        "**Unique Groups:**",
+                        split_validation["unique_groups"],
+                    )
 
                 st.subheader("Column Statistics")
 
