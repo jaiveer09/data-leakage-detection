@@ -2,7 +2,10 @@ import pandas as pd
 import pytest
 
 from modules.config import create_config
-from modules.split_validator import validate_split_configuration
+from modules.split_validator import (
+    validate_split_configuration,
+    create_train_test_split,
+)
 
 
 def test_valid_random_split():
@@ -155,3 +158,117 @@ def test_group_split_requires_multiple_groups():
         match="at least two unique groups",
     ):
         validate_split_configuration(df, config)
+
+def test_create_random_train_test_split():
+    df = pd.DataFrame({
+        "feature": range(10),
+        "target": [0, 1] * 5,
+    })
+
+    config = create_config(
+        target_column="target",
+        split_type="random",
+        test_size=0.2,
+    )
+
+    train_df, test_df = create_train_test_split(df, config)
+
+    assert len(train_df) == 8
+    assert len(test_df) == 2
+
+    assert set(train_df.index).isdisjoint(
+        set(test_df.index)
+    )
+
+
+def test_create_time_train_test_split():
+    df = pd.DataFrame({
+        "date": [
+            "2026-01-05",
+            "2026-01-01",
+            "2026-01-04",
+            "2026-01-02",
+            "2026-01-03",
+        ],
+        "target": [0, 1, 0, 1, 0],
+    })
+
+    config = create_config(
+        target_column="target",
+        timestamp_column="date",
+        split_type="time",
+        test_size=0.2,
+    )
+
+    train_df, test_df = create_train_test_split(df, config)
+
+    assert len(train_df) == 4
+    assert len(test_df) == 1
+
+    assert train_df["date"].max() < test_df["date"].min()
+
+    assert test_df.iloc[0]["date"] == pd.Timestamp(
+        "2026-01-05"
+    )
+
+
+def test_create_group_train_test_split():
+    df = pd.DataFrame({
+        "customer_id": [
+            101, 101,
+            102, 102,
+            103, 103,
+            104, 104,
+            105, 105,
+        ],
+        "feature": range(10),
+        "target": [0, 1] * 5,
+    })
+
+    config = create_config(
+        target_column="target",
+        group_column="customer_id",
+        split_type="group",
+        test_size=0.2,
+    )
+
+    train_df, test_df = create_train_test_split(df, config)
+
+    train_groups = set(train_df["customer_id"])
+    test_groups = set(test_df["customer_id"])
+
+    assert train_groups.isdisjoint(test_groups)
+
+    assert len(train_df) + len(test_df) == len(df)
+
+
+def test_time_split_uses_chronological_order():
+    df = pd.DataFrame({
+        "date": [
+            "2026-05-01",
+            "2026-01-01",
+            "2026-04-01",
+            "2026-02-01",
+            "2026-03-01",
+        ],
+        "target": [1, 0, 1, 0, 1],
+    })
+
+    config = create_config(
+        target_column="target",
+        timestamp_column="date",
+        split_type="time",
+        test_size=0.4,
+    )
+
+    train_df, test_df = create_train_test_split(df, config)
+
+    assert len(train_df) == 3
+    assert len(test_df) == 2
+
+    assert train_df["date"].max() < test_df["date"].min()
+
+    assert list(test_df["date"]) == [
+        pd.Timestamp("2026-04-01"),
+        pd.Timestamp("2026-05-01"),
+    ]

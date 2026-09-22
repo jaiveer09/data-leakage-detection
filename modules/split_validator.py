@@ -1,5 +1,5 @@
 import pandas as pd
-
+from sklearn.model_selection import train_test_split, GroupShuffleSplit
 
 def validate_split_configuration(df, config):
     if not isinstance(df, pd.DataFrame):
@@ -108,3 +108,60 @@ def validate_group_split(df, config):
         "group_column": group_column,
         "unique_groups": unique_groups,
     }
+    
+def create_train_test_split(df, config):
+    split_type = config["split_type"]
+    test_size = config["test_size"]
+
+    # Validate the configuration and dataset before creating the split.
+    validate_split_configuration(df, config)
+
+    if split_type == "random":
+        train_df, test_df = train_test_split(
+            df,
+            test_size=test_size,
+            random_state=42,
+        )
+
+    elif split_type == "time":
+        timestamp_column = config["timestamp_column"]
+
+        sorted_df = df.copy()
+        sorted_df[timestamp_column] = pd.to_datetime(
+            sorted_df[timestamp_column]
+        )
+
+        sorted_df = sorted_df.sort_values(
+            by=timestamp_column
+        ).reset_index(drop=True)
+
+        test_rows = int(len(sorted_df) * test_size)
+
+        train_df = sorted_df.iloc[:-test_rows].copy()
+        test_df = sorted_df.iloc[-test_rows:].copy()
+
+    elif split_type == "group":
+        group_column = config["group_column"]
+
+        splitter = GroupShuffleSplit(
+            n_splits=1,
+            test_size=test_size,
+            random_state=42,
+        )
+
+        train_indices, test_indices = next(
+            splitter.split(
+                df,
+                groups=df[group_column],
+            )
+        )
+
+        train_df = df.iloc[train_indices].copy()
+        test_df = df.iloc[test_indices].copy()
+
+    else:
+        raise ValueError(
+            f"Unsupported split type: {split_type!r}."
+        )
+
+    return train_df, test_df

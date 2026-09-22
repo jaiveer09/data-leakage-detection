@@ -10,7 +10,10 @@ from modules.data_loader import load_csv, validate_columns
 from modules.profiler import profile_dataset
 from modules.config import create_config
 from modules.profiler import profile_dataset, get_column_statistics
-from modules.split_validator import validate_split_configuration
+from modules.split_validator import (
+    validate_split_configuration,
+    create_train_test_split,
+)
 
 
 st.set_page_config(
@@ -116,6 +119,8 @@ if uploaded_file is not None:
                     df,
                     config,
                 )
+                
+                train_df, test_df = create_train_test_split(df, config)
 
                 statistics = get_column_statistics(df)
 
@@ -213,6 +218,20 @@ if uploaded_file is not None:
                         split_validation["unique_groups"],
                     )
 
+                st.subheader("Train / Test Split")
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.write("**Training Set**")
+                    st.write(f"Rows: {len(train_df)}")
+                    st.dataframe(train_df, use_container_width=True)
+
+                with col2:
+                    st.write("**Testing Set**")
+                    st.write(f"Rows: {len(test_df)}")
+                    st.dataframe(test_df, use_container_width=True)
+                    
                 st.subheader("Column Statistics")
 
                 st.write("**Numerical Statistics**")
