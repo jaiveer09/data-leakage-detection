@@ -7,13 +7,13 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import streamlit as st
 
 from modules.data_loader import load_csv, validate_columns
-from modules.profiler import profile_dataset
 from modules.config import create_config
 from modules.profiler import profile_dataset, get_column_statistics
 from modules.split_validator import (
     validate_split_configuration,
     create_train_test_split,
 )
+from modules.temporal_detector import detect_temporal_leakage
 
 
 st.set_page_config(
@@ -53,7 +53,7 @@ if uploaded_file is not None:
         optional_columns = ["None"] + columns
 
         timestamp_selection = st.selectbox(
-            "Timestamp Column (Required for Time-Based Split)",
+            "Timestamp Column (Optional, used for Temporal Leakage Analysis)",
             options=optional_columns,
         )
 
@@ -107,12 +107,12 @@ if uploaded_file is not None:
                 )
                 
                 config = create_config(
-                target_column=target_column,
-                timestamp_column=timestamp_column,
-                group_column=group_column,
-                split_type=split_type,
-                test_size=test_size,
-                cv_folds=int(cv_folds),
+                    target_column=target_column,
+                    timestamp_column=timestamp_column,
+                    group_column=group_column,
+                    split_type=split_type,
+                    test_size=test_size,
+                    cv_folds=int(cv_folds),
                 )
 
                 split_validation = validate_split_configuration(
@@ -121,7 +121,17 @@ if uploaded_file is not None:
                 )
                 
                 train_df, test_df = create_train_test_split(df, config)
+                
+                temporal_result = None
 
+                if config["timestamp_column"] is not None:
+                    temporal_result = detect_temporal_leakage(
+                        train_df,
+                        test_df,
+                        config["timestamp_column"],
+                        config["split_type"],
+                    )
+                    
                 statistics = get_column_statistics(df)
 
                 profile = profile_dataset(
@@ -231,6 +241,77 @@ if uploaded_file is not None:
                     st.write("**Testing Set**")
                     st.write(f"Rows: {len(test_df)}")
                     st.dataframe(test_df, use_container_width=True)
+                    
+                if temporal_result is not None:
+                    st.subheader("Temporal Leakage Analysis")
+
+                    st.write("**Split Strategy Assessment**")
+
+                    if temporal_result["configuration_risk"]:
+                        st.warning(
+                            temporal_result["configuration_message"]
+                        )
+                    else:
+                        st.success(
+                            temporal_result["configuration_message"]
+                        )
+
+                    st.write("**Observed Train / Test Analysis**")
+
+                    if temporal_result["temporal_overlap"]:
+                        st.error(temporal_result["message"])
+                    else:
+                        st.success(temporal_result["message"])
+
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.write(
+                            "**Earliest Training Timestamp:**",
+                            temporal_result[
+                                "earliest_train_timestamp"
+                            ],
+                        )
+
+                        st.write(
+                            "**Latest Training Timestamp:**",
+                            temporal_result[
+                                "latest_train_timestamp"
+                            ],
+                        )
+
+                    with col2:
+                        st.write(
+                            "**Earliest Testing Timestamp:**",
+                            temporal_result[
+                                "earliest_test_timestamp"
+                            ],
+                        )
+
+                        st.write(
+                            "**Latest Testing Timestamp:**",
+                            temporal_result[
+                                "latest_test_timestamp"
+                            ],
+                        )
+
+                    st.write(
+                        "**Observed Temporal Overlap:**",
+                        "Yes"
+                        if temporal_result["temporal_overlap"]
+                        else "No",
+                    )
+
+                    st.write(
+                        "**Severity:**",
+                        temporal_result["severity"].capitalize(),
+                    )
+
+                    if temporal_result["recommendation"]:
+                        st.info(
+                            "Recommendation: "
+                            + temporal_result["recommendation"]
+                        )
                     
                 st.subheader("Column Statistics")
 
