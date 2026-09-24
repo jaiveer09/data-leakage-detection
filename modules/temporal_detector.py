@@ -101,11 +101,21 @@ def detect_temporal_leakage(
             "observations that occur at or after the earliest "
             "testing observation."
         )
-        recommendation = (
-            "Use a splitting strategy that keeps training "
-            "observations chronologically before testing "
-            "observations."
-        )
+        if (
+            split_type == "time"
+            and latest_train_timestamp == earliest_test_timestamp
+        ):
+            recommendation = (
+                "Adjust the time-based split boundary so that "
+                "observations with the same timestamp are not divided "
+                "between the training and testing sets."
+            )
+        else:
+            recommendation = (
+                "Use a splitting strategy that keeps training "
+                "observations chronologically before testing "
+                "observations."
+            )
     else:
         severity = "none"
         message = (

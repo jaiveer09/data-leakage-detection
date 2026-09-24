@@ -249,3 +249,158 @@ def test_unsupported_split_type():
             "date",
             "unsupported",
         )
+
+def test_invalid_testing_timestamp():
+    train_df = pd.DataFrame({
+        "date": [
+            "2026-01-01",
+            "2026-01-02",
+        ],
+    })
+
+    test_df = pd.DataFrame({
+        "date": [
+            "2026-01-03",
+            "not-a-date",
+        ],
+    })
+
+    with pytest.raises(
+        ValueError,
+        match="Testing data contains missing or invalid timestamps",
+    ):
+        detect_temporal_leakage(
+            train_df,
+            test_df,
+            "date",
+            "random",
+        )
+
+
+def test_timestamp_column_missing_from_testing_data():
+    train_df = pd.DataFrame({
+        "date": [
+            "2026-01-01",
+            "2026-01-02",
+        ],
+    })
+
+    test_df = pd.DataFrame({
+        "feature": [10, 20],
+    })
+
+    with pytest.raises(
+        ValueError,
+        match="Timestamp column",
+    ):
+        detect_temporal_leakage(
+            train_df,
+            test_df,
+            "date",
+            "random",
+        )
+
+
+def test_group_split_without_temporal_overlap():
+    train_df = pd.DataFrame({
+        "date": [
+            "2026-01-01",
+            "2026-01-02",
+        ],
+        "customer_id": [101, 102],
+    })
+
+    test_df = pd.DataFrame({
+        "date": [
+            "2026-01-03",
+            "2026-01-04",
+        ],
+        "customer_id": [103, 104],
+    })
+
+    result = detect_temporal_leakage(
+        train_df,
+        test_df,
+        "date",
+        "group",
+    )
+
+    assert result["temporal_overlap"] is False
+    assert result["risk_detected"] is False
+    assert result["configuration_risk"] is True
+    assert result["severity"] == "none"
+    assert result["recommendation"] is not None
+
+
+def test_timestamp_range_values():
+    train_df = pd.DataFrame({
+        "date": [
+            "2026-01-01",
+            "2026-01-02",
+            "2026-01-03",
+        ],
+    })
+
+    test_df = pd.DataFrame({
+        "date": [
+            "2026-01-04",
+            "2026-01-05",
+        ],
+    })
+
+    result = detect_temporal_leakage(
+        train_df,
+        test_df,
+        "date",
+        "time",
+    )
+
+    assert result["earliest_train_timestamp"] == pd.Timestamp(
+        "2026-01-01"
+    )
+
+    assert result["latest_train_timestamp"] == pd.Timestamp(
+        "2026-01-03"
+    )
+
+    assert result["earliest_test_timestamp"] == pd.Timestamp(
+        "2026-01-04"
+    )
+
+    assert result["latest_test_timestamp"] == pd.Timestamp(
+        "2026-01-05"
+    )
+    
+def test_time_split_same_timestamp_recommendation():
+    train_df = pd.DataFrame({
+        "date": [
+            "2026-01-01",
+            "2026-01-05",
+        ],
+    })
+
+    test_df = pd.DataFrame({
+        "date": [
+            "2026-01-05",
+            "2026-01-06",
+        ],
+    })
+
+    result = detect_temporal_leakage(
+        train_df,
+        test_df,
+        "date",
+        "time",
+    )
+
+    assert result["temporal_overlap"] is True
+    assert result["severity"] == "high"
+
+    assert (
+        result["recommendation"]
+        == (
+            "Adjust the time-based split boundary so that "
+            "observations with the same timestamp are not divided "
+            "between the training and testing sets."
+        )
+    )
