@@ -1,0 +1,11 @@
+age,income,city,customer_id,target
+25,50000,Fullerton,101,0
+26,52000,Fullerton,101,0
+35,70000,Anaheim,102,1
+36,72000,Anaheim,102,1
+45,90000,Irvine,103,0
+46,92000,Irvine,103,0
+30,60000,Fullerton,104,1
+31,62000,Fullerton,104,1
+40,80000,Anaheim,105,0
+41,82000,Anaheim,105,0

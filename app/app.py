@@ -14,6 +14,7 @@ from modules.split_validator import (
     create_train_test_split,
 )
 from modules.temporal_detector import detect_temporal_leakage
+from modules.group_detector import detect_group_leakage
 
 
 st.set_page_config(
@@ -121,6 +122,15 @@ if uploaded_file is not None:
                 )
                 
                 train_df, test_df = create_train_test_split(df, config)
+                
+                group_result = None
+
+                if config["group_column"] is not None:
+                    group_result = detect_group_leakage(
+                        train_df,
+                        test_df,
+                        config["group_column"],
+                    )
                 
                 temporal_result = None
 
@@ -312,7 +322,60 @@ if uploaded_file is not None:
                             "Recommendation: "
                             + temporal_result["recommendation"]
                         )
-                    
+                
+                if group_result is not None:
+                    st.subheader("Group Leakage Analysis")
+
+                    if group_result["leakage_detected"]:
+                        st.error(group_result["message"])
+                    else:
+                        st.success(group_result["message"])
+
+                    col1, col2, col3 = st.columns(3)
+
+                    col1.metric(
+                        "Training Groups",
+                        group_result["train_group_count"],
+                    )
+
+                    col2.metric(
+                        "Testing Groups",
+                        group_result["test_group_count"],
+                    )
+
+                    col3.metric(
+                        "Overlapping Groups",
+                        group_result["overlap_count"],
+                    )
+
+                    st.write(
+                        "**Group Column:**",
+                        group_result["group_column"],
+                    )
+
+                    st.write(
+                        "**Observed Group Leakage:**",
+                        "Yes"
+                        if group_result["leakage_detected"]
+                        else "No",
+                    )
+
+                    st.write(
+                        "**Severity:**",
+                        group_result["severity"].capitalize(),
+                    )
+
+                    if group_result["overlapping_groups"]:
+                        st.write(
+                            "**Overlapping Group Values:**",
+                            group_result["overlapping_groups"],
+                        )
+
+                    if group_result["recommendation"]:
+                        st.info(
+                            "Recommendation: "
+                            + group_result["recommendation"]
+                        )    
                 st.subheader("Column Statistics")
 
                 st.write("**Numerical Statistics**")
