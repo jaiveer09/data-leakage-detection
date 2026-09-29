@@ -4,6 +4,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+import pandas as pd
 import streamlit as st
 
 from modules.data_loader import load_csv, validate_columns
@@ -15,7 +16,10 @@ from modules.split_validator import (
 )
 from modules.temporal_detector import detect_temporal_leakage
 from modules.group_detector import detect_group_leakage
-
+from modules.proxy_detector import (
+    analyze_numerical_target_correlation,
+    identify_proxy_candidates,
+)
 
 st.set_page_config(
     page_title="Data Leakage Detection System",
@@ -140,6 +144,21 @@ if uploaded_file is not None:
                         test_df,
                         config["timestamp_column"],
                         config["split_type"],
+                    )
+                
+                proxy_correlation_result = None
+                proxy_candidate_result = None
+
+                if pd.api.types.is_numeric_dtype(df[target_column]):
+                    proxy_correlation_result = (
+                        analyze_numerical_target_correlation(
+                            df,
+                            target_column,
+                        )
+                    )
+
+                    proxy_candidate_result = identify_proxy_candidates(
+                        proxy_correlation_result
                     )
                     
                 statistics = get_column_statistics(df)
@@ -375,7 +394,96 @@ if uploaded_file is not None:
                         st.info(
                             "Recommendation: "
                             + group_result["recommendation"]
-                        )    
+                        )
+                st.subheader("Proxy Leakage Analysis")
+
+                if proxy_correlation_result is None:
+                    st.info(
+                        "Proxy leakage correlation analysis was not performed "
+                        "because the selected target column is not numerical."
+                    )
+
+                else:
+                    st.write(
+                        "**Numerical Feature-to-Target Correlations**"
+                    )
+
+                    correlation_rows = []
+
+                    for item in proxy_correlation_result["correlations"]:
+                        correlation_rows.append({
+                            "Feature": item["feature"],
+                            "Correlation": item["correlation"],
+                            "Absolute Correlation": (
+                                item["absolute_correlation"]
+                            ),
+                        })
+
+                    if correlation_rows:
+                        correlation_df = pd.DataFrame(
+                            correlation_rows
+                        )
+
+                        st.dataframe(
+                            correlation_df,
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                    else:
+                        st.info(
+                            "No numerical feature columns are available "
+                            "for correlation analysis."
+                        )
+
+                    st.write(
+                        "**Proxy Feature Candidate Assessment**"
+                    )
+
+                    candidate_count = (
+                        proxy_candidate_result["candidate_count"]
+                    )
+
+                    if candidate_count > 0:
+                        st.warning(
+                            f"{candidate_count} possible proxy leakage "
+                            "candidate(s) identified."
+                        )
+
+                        for candidate in (
+                            proxy_candidate_result["candidates"]
+                        ):
+                            st.write(
+                                f"**{candidate['feature']}**"
+                            )
+
+                            st.write(
+                                "Correlation:",
+                                round(
+                                    candidate["correlation"],
+                                    4,
+                                ),
+                            )
+
+                            st.write(
+                                candidate["reason"]
+                            )
+
+                    else:
+                        st.success(
+                            "No proxy leakage candidates were identified "
+                            "using the current correlation threshold."
+                        )
+
+                    st.write(
+                        "**Correlation Threshold:**",
+                        proxy_candidate_result[
+                            "correlation_threshold"
+                        ],
+                    )
+
+                    st.info(
+                        proxy_candidate_result["warning"]
+                    )    
                 st.subheader("Column Statistics")
 
                 st.write("**Numerical Statistics**")
