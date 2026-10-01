@@ -21,6 +21,11 @@ from modules.proxy_detector import (
     identify_proxy_candidates,
 )
 
+from modules.pipeline_validator import (
+    validate_preprocessing_configuration,
+    validate_cross_validation_configuration,
+)
+
 st.set_page_config(
     page_title="Data Leakage Detection System",
     layout="wide",
@@ -101,9 +106,65 @@ if uploaded_file is not None:
             value=5,
             step=1,
         )
+        
+        cv_strategy = st.selectbox(
+            "Cross-Validation Strategy",
+            options=[
+                "kfold",
+                "time_series",
+                "group",
+            ],
+        )
+        
+        st.subheader("Preprocessing Configuration")
+
+        use_scaling = st.checkbox(
+            "Use feature scaling"
+        )
+
+        scaling_scope = None
+
+        if use_scaling:
+            scaling_scope = st.selectbox(
+                "Feature Scaling Fit Scope",
+                options=[
+                    "training",
+                    "full_dataset",
+                ],
+            )
+
+        use_imputation = st.checkbox(
+            "Use missing-value imputation"
+        )
+
+        imputation_scope = None
+
+        if use_imputation:
+            imputation_scope = st.selectbox(
+                "Imputation Fit Scope",
+                options=[
+                    "training",
+                    "full_dataset",
+                ],
+            )
 
         if st.button("Analyze Dataset"):
             try:
+                
+                preprocessing_steps = []
+
+                if use_scaling:
+                    preprocessing_steps.append({
+                        "name": "Feature Scaling",
+                        "fit_scope": scaling_scope,
+                    })
+
+                if use_imputation:
+                    preprocessing_steps.append({
+                        "name": "Missing-Value Imputation",
+                        "fit_scope": imputation_scope,
+                    })
+                    
                 validate_columns(
                     df,
                     target_column,
@@ -118,6 +179,20 @@ if uploaded_file is not None:
                     split_type=split_type,
                     test_size=test_size,
                     cv_folds=int(cv_folds),
+                )
+                
+                preprocessing_result = (
+                    validate_preprocessing_configuration(
+                        preprocessing_steps
+                    )
+                )
+
+                cross_validation_result = (
+                    validate_cross_validation_configuration(
+                        split_type=config["split_type"],
+                        cv_strategy=cv_strategy,
+                        cv_folds=config["cv_folds"],
+                    )
                 )
 
                 split_validation = validate_split_configuration(
@@ -211,6 +286,75 @@ if uploaded_file is not None:
                 st.write("**Test Size:**", config["test_size"])
                 st.write("**Cross-Validation Folds:**", config["cv_folds"])
                 
+                st.subheader("Pipeline Validation")
+
+                st.write(
+                    "**Preprocessing Leakage Assessment**"
+                )
+
+                if preprocessing_result["risk_detected"]:
+                    st.warning(
+                        preprocessing_result["summary"]
+                    )
+                else:
+                    st.success(
+                        preprocessing_result["summary"]
+                    )
+
+                for finding in preprocessing_result["findings"]:
+                    st.write(
+                        f"**{finding['step']}**"
+                    )
+
+                    if finding["risk_detected"]:
+                        st.warning(finding["message"])
+                    else:
+                        st.success(finding["message"])
+
+                    if finding["recommendation"]:
+                        st.info(
+                            "Recommendation: "
+                            + finding["recommendation"]
+                        )
+
+                st.write(
+                    "**Cross-Validation Assessment**"
+                )
+
+                if cross_validation_result["risk_detected"]:
+                    st.warning(
+                        cross_validation_result["message"]
+                    )
+                else:
+                    st.success(
+                        cross_validation_result["message"]
+                    )
+
+                st.write(
+                    "**Selected CV Strategy:**",
+                    cross_validation_result["cv_strategy"],
+                )
+
+                st.write(
+                    "**Recommended CV Strategy:**",
+                    cross_validation_result[
+                        "recommended_strategy"
+                    ],
+                )
+
+                st.write(
+                    "**CV Folds:**",
+                    cross_validation_result["cv_folds"],
+                )
+
+                if cross_validation_result["recommendation"]:
+                    st.info(
+                        "Recommendation: "
+                        + cross_validation_result[
+                            "recommendation"
+                        ]
+                    )
+                    
                 st.subheader("Split Validation")
 
                 st.success("Split configuration is valid.")

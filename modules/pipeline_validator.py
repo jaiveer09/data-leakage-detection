@@ -92,3 +92,126 @@ def validate_preprocessing_configuration(
         "findings": findings,
         "summary": summary,
     }
+
+def validate_cross_validation_configuration(
+    split_type,
+    cv_strategy,
+    cv_folds,
+):
+    valid_split_types = {
+        "random",
+        "time",
+        "group",
+    }
+
+    valid_cv_strategies = {
+        "kfold",
+        "time_series",
+        "group",
+    }
+
+    if split_type not in valid_split_types:
+        raise ValueError(
+            f"Unsupported split type: {split_type!r}."
+        )
+
+    if cv_strategy not in valid_cv_strategies:
+        raise ValueError(
+            f"Unsupported cross-validation strategy: "
+            f"{cv_strategy!r}."
+        )
+
+    if (
+        not isinstance(cv_folds, int)
+        or isinstance(cv_folds, bool)
+        or cv_folds < 2
+    ):
+        raise ValueError(
+            "cv_folds must be an integer of at least 2."
+        )
+
+    recommended_strategy = {
+        "random": "kfold",
+        "time": "time_series",
+        "group": "group",
+    }[split_type]
+
+    risk_detected = (
+        cv_strategy != recommended_strategy
+    )
+
+    if risk_detected:
+        severity = "high"
+
+        if split_type == "time":
+            message = (
+                "The selected cross-validation strategy does "
+                "not preserve chronological ordering for "
+                "time-based data."
+            )
+            recommendation = (
+                "Use time-series cross-validation so that "
+                "validation observations occur after the "
+                "training observations."
+            )
+
+        elif split_type == "group":
+            message = (
+                "The selected cross-validation strategy does "
+                "not guarantee separation between groups."
+            )
+            recommendation = (
+                "Use group-aware cross-validation so that "
+                "records from the same group are not divided "
+                "between training and validation folds."
+            )
+
+        else:
+            message = (
+                "The selected cross-validation strategy does "
+                "not match the random evaluation configuration."
+            )
+            recommendation = (
+                "Use standard K-fold cross-validation for the "
+                "current random evaluation configuration, "
+                "unless the dataset requires temporal or group "
+                "separation."
+            )
+
+    else:
+        severity = "none"
+
+        if split_type == "time":
+            message = (
+                "The selected time-series cross-validation "
+                "strategy is appropriate for preserving "
+                "chronological ordering."
+            )
+
+        elif split_type == "group":
+            message = (
+                "The selected group-aware cross-validation "
+                "strategy is appropriate for preserving "
+                "group separation."
+            )
+
+        else:
+            message = (
+                "The selected K-fold cross-validation strategy "
+                "is appropriate for the random evaluation "
+                "configuration."
+            )
+
+        recommendation = None
+
+    return {
+        "analysis_type": "cross_validation_validation",
+        "split_type": split_type,
+        "cv_strategy": cv_strategy,
+        "cv_folds": cv_folds,
+        "recommended_strategy": recommended_strategy,
+        "risk_detected": risk_detected,
+        "severity": severity,
+        "message": message,
+        "recommendation": recommendation,
+    }

@@ -2,6 +2,7 @@ import pytest
 
 from modules.pipeline_validator import (
     validate_preprocessing_configuration,
+    validate_cross_validation_configuration,
 )
 
 
@@ -226,3 +227,192 @@ def test_invalid_fit_scope_rejected():
         match="must specify fit_scope",
     ):
         validate_preprocessing_configuration(steps)
+
+def test_random_split_with_kfold_is_valid():
+    result = validate_cross_validation_configuration(
+        split_type="random",
+        cv_strategy="kfold",
+        cv_folds=5,
+    )
+
+    assert result["risk_detected"] is False
+    assert result["severity"] == "none"
+    assert result["recommended_strategy"] == "kfold"
+    assert result["recommendation"] is None
+
+
+def test_time_split_with_time_series_is_valid():
+    result = validate_cross_validation_configuration(
+        split_type="time",
+        cv_strategy="time_series",
+        cv_folds=5,
+    )
+
+    assert result["risk_detected"] is False
+    assert result["severity"] == "none"
+    assert result["recommended_strategy"] == "time_series"
+    assert result["recommendation"] is None
+
+
+def test_group_split_with_group_cv_is_valid():
+    result = validate_cross_validation_configuration(
+        split_type="group",
+        cv_strategy="group",
+        cv_folds=5,
+    )
+
+    assert result["risk_detected"] is False
+    assert result["severity"] == "none"
+    assert result["recommended_strategy"] == "group"
+    assert result["recommendation"] is None
+
+
+def test_time_split_with_kfold_detects_risk():
+    result = validate_cross_validation_configuration(
+        split_type="time",
+        cv_strategy="kfold",
+        cv_folds=5,
+    )
+
+    assert result["risk_detected"] is True
+    assert result["severity"] == "high"
+    assert result["recommended_strategy"] == "time_series"
+    assert result["recommendation"] is not None
+
+
+def test_group_split_with_kfold_detects_risk():
+    result = validate_cross_validation_configuration(
+        split_type="group",
+        cv_strategy="kfold",
+        cv_folds=5,
+    )
+
+    assert result["risk_detected"] is True
+    assert result["severity"] == "high"
+    assert result["recommended_strategy"] == "group"
+    assert result["recommendation"] is not None
+
+
+def test_random_split_with_time_series_detects_mismatch():
+    result = validate_cross_validation_configuration(
+        split_type="random",
+        cv_strategy="time_series",
+        cv_folds=5,
+    )
+
+    assert result["risk_detected"] is True
+    assert result["recommended_strategy"] == "kfold"
+
+
+def test_random_split_with_group_cv_detects_mismatch():
+    result = validate_cross_validation_configuration(
+        split_type="random",
+        cv_strategy="group",
+        cv_folds=5,
+    )
+
+    assert result["risk_detected"] is True
+    assert result["recommended_strategy"] == "kfold"
+
+
+def test_time_split_with_group_cv_detects_mismatch():
+    result = validate_cross_validation_configuration(
+        split_type="time",
+        cv_strategy="group",
+        cv_folds=5,
+    )
+
+    assert result["risk_detected"] is True
+    assert result["recommended_strategy"] == "time_series"
+
+
+def test_group_split_with_time_series_detects_mismatch():
+    result = validate_cross_validation_configuration(
+        split_type="group",
+        cv_strategy="time_series",
+        cv_folds=5,
+    )
+
+    assert result["risk_detected"] is True
+    assert result["recommended_strategy"] == "group"
+
+
+def test_cross_validation_metadata():
+    result = validate_cross_validation_configuration(
+        split_type="random",
+        cv_strategy="kfold",
+        cv_folds=10,
+    )
+
+    assert result["analysis_type"] == (
+        "cross_validation_validation"
+    )
+    assert result["split_type"] == "random"
+    assert result["cv_strategy"] == "kfold"
+    assert result["cv_folds"] == 10
+
+
+def test_invalid_split_type_rejected():
+    with pytest.raises(
+        ValueError,
+        match="Unsupported split type",
+    ):
+        validate_cross_validation_configuration(
+            split_type="invalid",
+            cv_strategy="kfold",
+            cv_folds=5,
+        )
+
+
+def test_invalid_cv_strategy_rejected():
+    with pytest.raises(
+        ValueError,
+        match="Unsupported cross-validation strategy",
+    ):
+        validate_cross_validation_configuration(
+            split_type="random",
+            cv_strategy="invalid",
+            cv_folds=5,
+        )
+
+
+@pytest.mark.parametrize(
+    "invalid_folds",
+    [
+        0,
+        1,
+        -1,
+        2.5,
+        "5",
+        True,
+    ],
+)
+def test_invalid_cv_folds_rejected(invalid_folds):
+    with pytest.raises(
+        ValueError,
+        match="cv_folds must be an integer of at least 2",
+    ):
+        validate_cross_validation_configuration(
+            split_type="random",
+            cv_strategy="kfold",
+            cv_folds=invalid_folds,
+        )
+
+
+@pytest.mark.parametrize(
+    "valid_folds",
+    [
+        2,
+        5,
+        10,
+    ],
+)
+def test_valid_cv_fold_counts_accepted(valid_folds):
+    result = validate_cross_validation_configuration(
+        split_type="random",
+        cv_strategy="kfold",
+        cv_folds=valid_folds,
+    )
+
+    assert result["cv_folds"] == valid_folds
+    assert result["risk_detected"] is False
