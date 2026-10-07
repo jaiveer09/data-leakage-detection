@@ -6,6 +6,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 import streamlit as st
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 from modules.data_loader import load_csv, validate_columns
 from modules.config import create_config
@@ -24,6 +26,16 @@ from modules.proxy_detector import (
 from modules.pipeline_validator import (
     validate_preprocessing_configuration,
     validate_cross_validation_configuration,
+)
+
+from modules.risk_assessor import (
+    create_leakage_finding,
+    assess_overall_risk,
+)
+
+from modules.diagnostic_model import (
+    run_diagnostic_model,
+    analyze_feature_importance,
 )
 
 st.set_page_config(
@@ -235,14 +247,406 @@ if uploaded_file is not None:
                     proxy_candidate_result = identify_proxy_candidates(
                         proxy_correlation_result
                     )
+                
+                    leakage_findings = []
+
+                    if temporal_result is not None:
+                        leakage_findings.append(
+                            create_leakage_finding(
+                                category="Temporal Leakage",
+                                title="Temporal Split Analysis",
+                                message=temporal_result["message"],
+                                severity=temporal_result["severity"],
+                                risk_detected=temporal_result[
+                                    "risk_detected"
+                                ],
+                                recommendation=temporal_result[
+                                    "recommendation"
+                                ],
+                                details={
+                                    "split_type": temporal_result[
+                                        "split_type"
+                                    ],
+                                    "configuration_risk": temporal_result[
+                                        "configuration_risk"
+                                    ],
+                                },
+                            )
+                        )
+
+                    if group_result is not None:
+                        leakage_findings.append(
+                            create_leakage_finding(
+                                category="Group Leakage",
+                                title="Group Separation Analysis",
+                                message=group_result["message"],
+                                severity=group_result["severity"],
+                                risk_detected=group_result[
+                                    "risk_detected"
+                                ],
+                                recommendation=group_result[
+                                    "recommendation"
+                                ],
+                                details={
+                                    "group_column": group_result[
+                                        "group_column"
+                                    ],
+                                    "overlap_count": group_result[
+                                        "overlap_count"
+                                    ],
+                                },
+                            )
+                        )
+
+                    if proxy_candidate_result is not None:
+                        proxy_risk_detected = (
+                            proxy_candidate_result[
+                                "candidate_count"
+                            ] > 0
+                        )
+
+                        leakage_findings.append(
+                            create_leakage_finding(
+                                category="Proxy Leakage",
+                                title="Proxy Feature Analysis",
+                                message=(
+                                    f"{proxy_candidate_result['candidate_count']} "
+                                    "possible proxy leakage candidate(s) "
+                                    "were identified."
+                                    if proxy_risk_detected
+                                    else
+                                    "No proxy leakage candidates were "
+                                    "identified using the current "
+                                    "correlation threshold."
+                                ),
+                                severity=(
+                                    "medium"
+                                    if proxy_risk_detected
+                                    else "none"
+                                ),
+                                risk_detected=proxy_risk_detected,
+                                recommendation=(
+                                    "Review strongly correlated features "
+                                    "to determine whether they encode "
+                                    "target information that would not be "
+                                    "available at prediction time."
+                                    if proxy_risk_detected
+                                    else None
+                                ),
+                                details={
+                                    "candidate_count":
+                                        proxy_candidate_result[
+                                            "candidate_count"
+                                        ],
+                                    "correlation_threshold":
+                                        proxy_candidate_result[
+                                            "correlation_threshold"
+                                        ],
+                                },
+                            )
+                        )
+
+                    leakage_findings.append(
+                        create_leakage_finding(
+                            category="Preprocessing Leakage",
+                            title="Preprocessing Configuration",
+                            message=preprocessing_result["summary"],
+                            severity=preprocessing_result["severity"],
+                            risk_detected=preprocessing_result[
+                                "risk_detected"
+                            ],
+                            recommendation=(
+                                "Fit preprocessing operations using "
+                                "training data only."
+                                if preprocessing_result[
+                                    "risk_detected"
+                                ]
+                                else None
+                            ),
+                            details={
+                                "step_count": preprocessing_result[
+                                    "step_count"
+                                ],
+                                "risky_step_count":
+                                    preprocessing_result[
+                                        "risky_step_count"
+                                    ],
+                            },
+                        )
+                    )
+
+                    leakage_findings.append(
+                        create_leakage_finding(
+                            category="Cross-Validation Risk",
+                            title="Cross-Validation Configuration",
+                            message=cross_validation_result["message"],
+                            severity=cross_validation_result["severity"],
+                            risk_detected=cross_validation_result[
+                                "risk_detected"
+                            ],
+                            recommendation=cross_validation_result[
+                                "recommendation"
+                            ],
+                            details={
+                                "selected_strategy":
+                                    cross_validation_result[
+                                        "cv_strategy"
+                                    ],
+                                "recommended_strategy":
+                                    cross_validation_result[
+                                        "recommended_strategy"
+                                    ],
+                                "cv_folds":
+                                    cross_validation_result[
+                                        "cv_folds"
+                                    ],
+                            },
+                        )
+                    )
                     
+                overall_risk_result = assess_overall_risk(
+                    leakage_findings
+                )
+                    
+                diagnostic_result = None
+                feature_importance_result = None
+                diagnostic_error = None
+
+                diagnostic_excluded_columns = []
+
+                if config["timestamp_column"] is not None:
+                    diagnostic_excluded_columns.append(
+                        config["timestamp_column"]
+                    )
+
+                if config["group_column"] is not None:
+                    diagnostic_excluded_columns.append(
+                        config["group_column"]
+                    )
+
+                try:
+                    diagnostic_result = run_diagnostic_model(
+                        train_df,
+                        test_df,
+                        target_column=target_column,
+                        excluded_columns=diagnostic_excluded_columns,
+                    )
+
+                    feature_importance_result = (
+                        analyze_feature_importance(
+                            diagnostic_result
+                        )
+                    )
+
+                except ValueError as diagnostic_exception:
+                    diagnostic_error = str(
+                        diagnostic_exception
+                    )
+                        
                 statistics = get_column_statistics(df)
 
                 profile = profile_dataset(
                     df,
                     target_column,
                 )
+                
+                st.subheader("Leakage Findings Summary")
 
+                risky_finding_count = sum(
+                    finding["risk_detected"]
+                    for finding in leakage_findings
+                )
+
+                summary_col1, summary_col2 = st.columns(2)
+
+                summary_col1.metric(
+                    "Checks Performed",
+                    len(leakage_findings),
+                )
+
+                summary_col2.metric(
+                    "Risks Identified",
+                    risky_finding_count,
+                )
+                
+                st.write("**Overall Leakage Risk**")
+
+                overall_risk = overall_risk_result[
+                    "overall_risk"
+                ]
+
+                if overall_risk == "high":
+                    st.error(
+                        overall_risk_result["summary"]
+                    )
+                elif overall_risk == "medium":
+                    st.warning(
+                        overall_risk_result["summary"]
+                    )
+                elif overall_risk == "low":
+                    st.warning(
+                        overall_risk_result["summary"]
+                    )
+                else:
+                    st.success(
+                        overall_risk_result["summary"]
+                    )
+
+                severity_counts = overall_risk_result[
+                    "severity_counts"
+                ]
+
+                risk_col1, risk_col2, risk_col3 = st.columns(3)
+
+                risk_col1.metric(
+                    "High Risk Findings",
+                    severity_counts["high"],
+                )
+
+                risk_col2.metric(
+                    "Medium Risk Findings",
+                    severity_counts["medium"],
+                )
+
+                risk_col3.metric(
+                    "Low Risk Findings",
+                    severity_counts["low"],
+                )
+
+                for finding in leakage_findings:
+                    st.write(
+                        f"**{finding['category']} — "
+                        f"{finding['title']}**"
+                    )
+
+                    st.write(
+                        "**Severity:**",
+                        finding["severity"].capitalize(),
+                    )
+
+                    if finding["risk_detected"]:
+                        st.warning(finding["message"])
+                    else:
+                        st.success(finding["message"])
+
+                    if finding["recommendation"]:
+                        st.info(
+                            "Recommendation: "
+                            + finding["recommendation"]
+                        )
+
+                    with st.expander("View evidence"):
+                        if finding["details"]:
+                            st.json(finding["details"])
+                        else:
+                            st.write(
+                                "No additional evidence details "
+                                "are available."
+                            )
+
+                st.subheader("Diagnostic Model Analysis")
+
+                if diagnostic_result is None:
+                    st.info(
+                        "Diagnostic modeling could not be "
+                        "performed for this dataset."
+                    )
+
+                    if diagnostic_error:
+                        st.write(
+                            "**Reason:**",
+                            diagnostic_error,
+                        )
+
+                else:
+                    diagnostic_col1, diagnostic_col2, diagnostic_col3 = (
+                        st.columns(3)
+                    )
+
+                    diagnostic_col1.metric(
+                        "Task Type",
+                        diagnostic_result[
+                            "task_type"
+                        ].capitalize(),
+                    )
+
+                    diagnostic_col2.metric(
+                        "Model",
+                        diagnostic_result[
+                            "model_name"
+                        ],
+                    )
+
+                    diagnostic_col3.metric(
+                        diagnostic_result[
+                            "metric_name"
+                        ].upper(),
+                        f"{diagnostic_result['score']:.4f}",
+                    )
+
+                    st.write(
+                        "**Features Used:**",
+                        diagnostic_result[
+                            "feature_columns"
+                        ],
+                    )
+
+                    st.write(
+                        "**Training Rows:**",
+                        diagnostic_result["train_rows"],
+                    )
+
+                    st.write(
+                        "**Testing Rows:**",
+                        diagnostic_result["test_rows"],
+                    )
+
+                    if feature_importance_result is not None:
+                        st.write(
+                            "**Diagnostic Feature Importance**"
+                        )
+
+                        importance_df = pd.DataFrame(
+                            feature_importance_result[
+                                "feature_importance"
+                            ]
+                        )
+
+                        if not importance_df.empty:
+                            importance_df = importance_df.rename(
+                                columns={
+                                    "feature": "Feature",
+                                    "importance": "Importance",
+                                }
+                            )
+
+                            st.dataframe(
+                                importance_df,
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+
+                            chart_data = (
+                                importance_df
+                                .set_index("Feature")
+                                ["Importance"]
+                            )
+
+                            st.bar_chart(chart_data)
+
+                            st.info(
+                                "Feature importance values are based "
+                                "on the absolute model coefficients. "
+                                "Higher importance indicates greater "
+                                "influence on the diagnostic model, "
+                                "but does not by itself prove leakage."
+                            )
+                        else:
+                            st.info(
+                                "No feature importance values "
+                                "are available."
+                            )
+                            
                 st.subheader("Dataset Profile")
 
                 col1, col2, col3 = st.columns(3)
@@ -562,7 +966,6 @@ if uploaded_file is not None:
                                 item["absolute_correlation"]
                             ),
                         })
-
                     if correlation_rows:
                         correlation_df = pd.DataFrame(
                             correlation_rows
@@ -573,6 +976,68 @@ if uploaded_file is not None:
                             use_container_width=True,
                             hide_index=True,
                         )
+
+                        valid_correlation_rows = [
+                            item
+                            for item in proxy_correlation_result[
+                                "correlations"
+                            ]
+                            if item["correlation"] is not None
+                        ]
+
+                        if valid_correlation_rows:
+                            st.write(
+                                "**Feature-to-Target Correlation Heatmap**"
+                            )
+
+                            heatmap_data = pd.DataFrame(
+                                {
+                                    item["feature"]: [
+                                        item["correlation"]
+                                    ]
+                                    for item in valid_correlation_rows
+                                },
+                                index=[target_column],
+                            )
+
+                            figure, axis = plt.subplots(
+                                figsize=(
+                                    max(
+                                        6,
+                                        len(valid_correlation_rows) * 1.2,
+                                    ),
+                                    1.8,
+                                )
+                            )
+
+                            sns.heatmap(
+                                heatmap_data,
+                                annot=True,
+                                fmt=".2f",
+                                cmap="coolwarm",
+                                center=0,
+                                vmin=-1,
+                                vmax=1,
+                                ax=axis,
+                            )
+
+                            axis.set_xlabel("Numerical Features")
+                            axis.set_ylabel("Target")
+                            axis.set_title(
+                                "Numerical Feature-to-Target Correlations"
+                            )
+
+                            figure.tight_layout()
+
+                            st.pyplot(figure)
+
+                            plt.close(figure)
+                        else:
+                            st.info(
+                                "No valid correlations are available "
+                                "for visualization."
+                            )
+
                     else:
                         st.info(
                             "No numerical feature columns are available "
