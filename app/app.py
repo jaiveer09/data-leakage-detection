@@ -235,6 +235,7 @@ if uploaded_file is not None:
                 
                 proxy_correlation_result = None
                 proxy_candidate_result = None
+                leakage_findings = []
 
                 if pd.api.types.is_numeric_dtype(df[target_column]):
                     proxy_correlation_result = (
@@ -248,161 +249,160 @@ if uploaded_file is not None:
                         proxy_correlation_result
                     )
                 
-                    leakage_findings = []
 
-                    if temporal_result is not None:
-                        leakage_findings.append(
-                            create_leakage_finding(
-                                category="Temporal Leakage",
-                                title="Temporal Split Analysis",
-                                message=temporal_result["message"],
-                                severity=temporal_result["severity"],
-                                risk_detected=temporal_result[
-                                    "risk_detected"
-                                ],
-                                recommendation=temporal_result[
-                                    "recommendation"
-                                ],
-                                details={
-                                    "split_type": temporal_result[
-                                        "split_type"
-                                    ],
-                                    "configuration_risk": temporal_result[
-                                        "configuration_risk"
-                                    ],
-                                },
-                            )
-                        )
-
-                    if group_result is not None:
-                        leakage_findings.append(
-                            create_leakage_finding(
-                                category="Group Leakage",
-                                title="Group Separation Analysis",
-                                message=group_result["message"],
-                                severity=group_result["severity"],
-                                risk_detected=group_result[
-                                    "risk_detected"
-                                ],
-                                recommendation=group_result[
-                                    "recommendation"
-                                ],
-                                details={
-                                    "group_column": group_result[
-                                        "group_column"
-                                    ],
-                                    "overlap_count": group_result[
-                                        "overlap_count"
-                                    ],
-                                },
-                            )
-                        )
-
-                    if proxy_candidate_result is not None:
-                        proxy_risk_detected = (
-                            proxy_candidate_result[
-                                "candidate_count"
-                            ] > 0
-                        )
-
-                        leakage_findings.append(
-                            create_leakage_finding(
-                                category="Proxy Leakage",
-                                title="Proxy Feature Analysis",
-                                message=(
-                                    f"{proxy_candidate_result['candidate_count']} "
-                                    "possible proxy leakage candidate(s) "
-                                    "were identified."
-                                    if proxy_risk_detected
-                                    else
-                                    "No proxy leakage candidates were "
-                                    "identified using the current "
-                                    "correlation threshold."
-                                ),
-                                severity=(
-                                    "medium"
-                                    if proxy_risk_detected
-                                    else "none"
-                                ),
-                                risk_detected=proxy_risk_detected,
-                                recommendation=(
-                                    "Review strongly correlated features "
-                                    "to determine whether they encode "
-                                    "target information that would not be "
-                                    "available at prediction time."
-                                    if proxy_risk_detected
-                                    else None
-                                ),
-                                details={
-                                    "candidate_count":
-                                        proxy_candidate_result[
-                                            "candidate_count"
-                                        ],
-                                    "correlation_threshold":
-                                        proxy_candidate_result[
-                                            "correlation_threshold"
-                                        ],
-                                },
-                            )
-                        )
-
+                if temporal_result is not None:
                     leakage_findings.append(
                         create_leakage_finding(
-                            category="Preprocessing Leakage",
-                            title="Preprocessing Configuration",
-                            message=preprocessing_result["summary"],
-                            severity=preprocessing_result["severity"],
-                            risk_detected=preprocessing_result[
+                            category="Temporal Leakage",
+                            title="Temporal Split Analysis",
+                            message=temporal_result["message"],
+                            severity=temporal_result["severity"],
+                            risk_detected=temporal_result[
                                 "risk_detected"
                             ],
-                            recommendation=(
-                                "Fit preprocessing operations using "
-                                "training data only."
-                                if preprocessing_result[
-                                    "risk_detected"
-                                ]
-                                else None
-                            ),
-                            details={
-                                "step_count": preprocessing_result[
-                                    "step_count"
-                                ],
-                                "risky_step_count":
-                                    preprocessing_result[
-                                        "risky_step_count"
-                                    ],
-                            },
-                        )
-                    )
-
-                    leakage_findings.append(
-                        create_leakage_finding(
-                            category="Cross-Validation Risk",
-                            title="Cross-Validation Configuration",
-                            message=cross_validation_result["message"],
-                            severity=cross_validation_result["severity"],
-                            risk_detected=cross_validation_result[
-                                "risk_detected"
-                            ],
-                            recommendation=cross_validation_result[
+                            recommendation=temporal_result[
                                 "recommendation"
                             ],
                             details={
-                                "selected_strategy":
-                                    cross_validation_result[
-                                        "cv_strategy"
+                                "split_type": temporal_result[
+                                    "split_type"
+                                ],
+                                "configuration_risk": temporal_result[
+                                    "configuration_risk"
+                                ],
+                            },
+                        )
+                    )
+
+                if group_result is not None:
+                    leakage_findings.append(
+                        create_leakage_finding(
+                            category="Group Leakage",
+                            title="Group Separation Analysis",
+                            message=group_result["message"],
+                            severity=group_result["severity"],
+                            risk_detected=group_result[
+                                "risk_detected"
+                            ],
+                            recommendation=group_result[
+                                "recommendation"
+                            ],
+                            details={
+                                "group_column": group_result[
+                                    "group_column"
+                                ],
+                                "overlap_count": group_result[
+                                    "overlap_count"
+                                ],
+                            },
+                        )
+                    )
+
+                if proxy_candidate_result is not None:
+                    proxy_risk_detected = (
+                        proxy_candidate_result[
+                            "candidate_count"
+                        ] > 0
+                    )
+
+                    leakage_findings.append(
+                        create_leakage_finding(
+                            category="Proxy Leakage",
+                            title="Proxy Feature Analysis",
+                            message=(
+                                f"{proxy_candidate_result['candidate_count']} "
+                                "possible proxy leakage candidate(s) "
+                                "were identified."
+                                if proxy_risk_detected
+                                else
+                                "No proxy leakage candidates were "
+                                "identified using the current "
+                                "correlation threshold."
+                            ),
+                            severity=(
+                                "medium"
+                                if proxy_risk_detected
+                                else "none"
+                            ),
+                            risk_detected=proxy_risk_detected,
+                            recommendation=(
+                                "Review strongly correlated features "
+                                "to determine whether they encode "
+                                "target information that would not be "
+                                "available at prediction time."
+                                if proxy_risk_detected
+                                else None
+                            ),
+                            details={
+                                "candidate_count":
+                                    proxy_candidate_result[
+                                        "candidate_count"
                                     ],
-                                "recommended_strategy":
-                                    cross_validation_result[
-                                        "recommended_strategy"
-                                    ],
-                                "cv_folds":
-                                    cross_validation_result[
-                                        "cv_folds"
+                                "correlation_threshold":
+                                    proxy_candidate_result[
+                                        "correlation_threshold"
                                     ],
                             },
                         )
                     )
+
+                leakage_findings.append(
+                    create_leakage_finding(
+                        category="Preprocessing Leakage",
+                        title="Preprocessing Configuration",
+                        message=preprocessing_result["summary"],
+                        severity=preprocessing_result["severity"],
+                        risk_detected=preprocessing_result[
+                            "risk_detected"
+                        ],
+                        recommendation=(
+                            "Fit preprocessing operations using "
+                            "training data only."
+                            if preprocessing_result[
+                                "risk_detected"
+                            ]
+                            else None
+                        ),
+                        details={
+                            "step_count": preprocessing_result[
+                                "step_count"
+                            ],
+                            "risky_step_count":
+                                preprocessing_result[
+                                    "risky_step_count"
+                                ],
+                        },
+                    )
+                )
+
+                leakage_findings.append(
+                    create_leakage_finding(
+                        category="Cross-Validation Risk",
+                        title="Cross-Validation Configuration",
+                        message=cross_validation_result["message"],
+                        severity=cross_validation_result["severity"],
+                        risk_detected=cross_validation_result[
+                            "risk_detected"
+                        ],
+                        recommendation=cross_validation_result[
+                            "recommendation"
+                        ],
+                        details={
+                            "selected_strategy":
+                                cross_validation_result[
+                                    "cv_strategy"
+                                ],
+                            "recommended_strategy":
+                                cross_validation_result[
+                                    "recommended_strategy"
+                                ],
+                            "cv_folds":
+                                cross_validation_result[
+                                    "cv_folds"
+                                ],
+                        },
+                    )
+                )
                     
                 overall_risk_result = assess_overall_risk(
                     leakage_findings
