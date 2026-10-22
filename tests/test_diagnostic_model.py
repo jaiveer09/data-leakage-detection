@@ -653,3 +653,80 @@ def test_feature_importance_requires_fields():
         match="missing required fields",
     ):
         analyze_feature_importance({})
+
+def test_comparison_uses_identical_train_test_rows_and_metric(monkeypatch):
+    import modules.diagnostic_model as diagnostic_module
+
+    train_df = pd.DataFrame({
+        "feature": [1, 2, 3, 4],
+        "suspected_proxy": [0, 1, 0, 1],
+        "target": [0, 1, 0, 1],
+    }, index=[10, 20, 30, 40])
+
+    test_df = pd.DataFrame({
+        "feature": [5, 6],
+        "suspected_proxy": [0, 1],
+        "target": [0, 1],
+    }, index=[50, 60])
+
+    calls = []
+
+    def fake_run_diagnostic_model(
+        train_df,
+        test_df,
+        target_column,
+        excluded_columns=None,
+    ):
+        calls.append({
+            "train_df": train_df.copy(deep=True),
+            "test_df": test_df.copy(deep=True),
+            "target_column": target_column,
+            "excluded_columns": list(excluded_columns or []),
+        })
+
+        return {
+            "task_type": "classification",
+            "metric_name": "accuracy",
+            "score": 0.7 if "suspected_proxy" in (
+                excluded_columns or []
+            ) else 0.9,
+            "feature_columns": [
+                "feature"
+            ] if "suspected_proxy" in (
+                excluded_columns or []
+            ) else ["feature", "suspected_proxy"],
+        }
+
+    monkeypatch.setattr(
+        diagnostic_module,
+        "run_diagnostic_model",
+        fake_run_diagnostic_model,
+    )
+
+    result = compare_clean_and_leaked_models(
+        train_df,
+        test_df,
+        target_column="target",
+        leaked_feature_columns=["suspected_proxy"],
+    )
+
+    assert len(calls) == 2
+
+    for call in calls:
+        pd.testing.assert_frame_equal(
+            call["train_df"],
+            train_df,
+        )
+        pd.testing.assert_frame_equal(
+            call["test_df"],
+            test_df,
+        )
+        assert call["target_column"] == "target"
+
+    assert "suspected_proxy" in calls[0]["excluded_columns"]
+    assert "suspected_proxy" not in calls[1]["excluded_columns"]
+
+    assert result["metric_name"] == "accuracy"
+    assert result["clean_score"] == pytest.approx(0.7)
+    assert result["leaked_score"] == pytest.approx(0.9)
+    assert result["score_difference"] == pytest.approx(0.2)

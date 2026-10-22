@@ -36,6 +36,12 @@ from modules.risk_assessor import (
 from modules.diagnostic_model import (
     run_diagnostic_model,
     analyze_feature_importance,
+    compare_clean_and_leaked_models,
+)
+
+from modules.report_generator import (
+    build_analysis_report,
+    report_to_json,
 )
 
 st.set_page_config(
@@ -160,6 +166,33 @@ if uploaded_file is not None:
                 ],
             )
 
+        st.subheader("Model Performance Comparison")
+
+        st.write(
+            "Optionally select numerical features suspected of "
+            "containing leakage. The application will compare "
+            "diagnostic model performance with and without them."
+        )
+
+        comparison_feature_options = [
+            column
+            for column in df.select_dtypes(include="number").columns
+            if column not in {
+                target_column,
+                timestamp_column,
+                group_column,
+            }
+        ]
+
+        selected_leakage_features = st.multiselect(
+            "Suspected Leakage Features",
+            options=comparison_feature_options,
+            help=(
+                "Select features that may contain information "
+                "unavailable at prediction time."
+            ),
+        )
+        
         if st.button("Analyze Dataset"):
             try:
                 
@@ -442,6 +475,22 @@ if uploaded_file is not None:
                     diagnostic_error = str(
                         diagnostic_exception
                     )
+                    
+                comparison_result = None
+                comparison_error = None
+
+                if selected_leakage_features:
+                    try:
+                        comparison_result = compare_clean_and_leaked_models(
+                            train_df,
+                            test_df,
+                            target_column=target_column,
+                            leaked_feature_columns=selected_leakage_features,
+                            excluded_columns=diagnostic_excluded_columns,
+                        )
+
+                    except ValueError as comparison_exception:
+                        comparison_error = str(comparison_exception)
                         
                 statistics = get_column_statistics(df)
 
@@ -646,6 +695,80 @@ if uploaded_file is not None:
                                 "No feature importance values "
                                 "are available."
                             )
+                            
+                if selected_leakage_features:
+                    st.subheader("Clean-versus-Leaked Model Comparison")
+
+                    if comparison_result is None:
+                        st.warning(
+                            "Model comparison could not be completed."
+                        )
+
+                        if comparison_error:
+                            st.write("**Reason:**", comparison_error)
+
+                    else:
+                        st.write(
+                            "**Suspected Leakage Features:**",
+                            selected_leakage_features,
+                        )
+
+                        comparison_col1, comparison_col2, comparison_col3 = (
+                            st.columns(3)
+                        )
+
+                        comparison_col1.metric(
+                            "Without Selected Features",
+                            f"{comparison_result['clean_score']:.4f}",
+                        )
+
+                        comparison_col2.metric(
+                            "With Selected Features",
+                            f"{comparison_result['leaked_score']:.4f}",
+                        )
+
+                        comparison_col3.metric(
+                            "Score Difference",
+                            f"{comparison_result['score_difference']:+.4f}",
+                        )
+
+                        st.write(
+                            "**Evaluation Metric:**",
+                            comparison_result["metric_name"].upper(),
+                        )
+
+                        comparison_chart = pd.DataFrame({
+                            "Configuration": [
+                                "Without Selected Features",
+                                "With Selected Features",
+                            ],
+                            "Score": [
+                                comparison_result["clean_score"],
+                                comparison_result["leaked_score"],
+                            ],
+                        })
+
+                        st.bar_chart(
+                            comparison_chart.set_index("Configuration")
+                        )
+
+                        if comparison_result["performance_inflated"]:
+                            st.warning(
+                                "Including the selected features increased "
+                                "the diagnostic model score. Investigate "
+                                "whether these features would legitimately "
+                                "be available at prediction time."
+                            )
+                        else:
+                            st.info(
+                                "Including the selected features did not "
+                                "increase the diagnostic model score."
+                            )
+
+                        st.caption(
+                            "A performance difference alone does not "
+                            "establish whether data leakage exists."
+                        )
                             
                 st.subheader("Dataset Profile")
 
@@ -1092,7 +1215,38 @@ if uploaded_file is not None:
 
                     st.info(
                         proxy_candidate_result["warning"]
-                    )    
+                    )
+                
+                st.subheader("Structured Analysis Report")
+
+                report = build_analysis_report(
+                    dataset_name=uploaded_file.name,
+                    profile=profile,
+                    config=config,
+                    cv_strategy=cv_strategy,
+                    preprocessing_steps=preprocessing_steps,
+                    overall_risk_result=overall_risk_result,
+                    diagnostic_result=diagnostic_result,
+                    diagnostic_error=diagnostic_error,
+                    comparison_result=comparison_result,
+                    comparison_error=comparison_error,
+                    selected_leakage_features=selected_leakage_features,
+                )
+
+                report_json = report_to_json(report)
+
+                st.write(
+                    "Download the analysis findings, risk assessment, "
+                    "configuration, and diagnostic results as JSON."
+                )
+
+                st.download_button(
+                    label="Download Analysis Report (JSON)",
+                    data=report_json,
+                    file_name="data_leakage_analysis_report.json",
+                    mime="application/json",
+                )
+                    
                 st.subheader("Column Statistics")
 
                 st.write("**Numerical Statistics**")
