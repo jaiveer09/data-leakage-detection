@@ -44,6 +44,51 @@ from modules.report_generator import (
     report_to_json,
 )
 
+from modules.distribution_visualizer import (
+    prepare_distribution,
+    create_distribution_figure,
+)
+
+
+@st.fragment
+def show_feature_distributions(df):
+    st.subheader("Feature Distributions")
+
+    st.write(
+        "Explore the distribution of individual dataset columns."
+    )
+
+    distribution_column = st.selectbox(
+        "Select a column to visualize",
+        options=df.columns.tolist(),
+        key="distribution_column",
+    )
+
+    distribution = prepare_distribution(
+        df,
+        distribution_column,
+    )
+
+    if distribution["type"] == "empty":
+        st.info(
+            "This column has no non-missing finite values "
+            "to visualize."
+        )
+        return
+
+    figure = create_distribution_figure(distribution)
+
+    try:
+        st.pyplot(figure)
+    finally:
+        plt.close(figure)
+
+    if distribution["truncated"]:
+        st.caption(
+            "Only the 15 most frequent categories are displayed."
+        )
+
+
 st.set_page_config(
     page_title="Data Leakage Detection System",
     layout="wide",
@@ -1254,6 +1299,8 @@ if uploaded_file is not None:
 
                 st.write("**Categorical Statistics**")
                 st.json(statistics["categorical"])
+                
+                show_feature_distributions(df)
 
             except ValueError as e:
                 st.error(str(e))
