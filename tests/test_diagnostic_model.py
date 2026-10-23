@@ -730,3 +730,174 @@ def test_comparison_uses_identical_train_test_rows_and_metric(monkeypatch):
     assert result["clean_score"] == pytest.approx(0.7)
     assert result["leaked_score"] == pytest.approx(0.9)
     assert result["score_difference"] == pytest.approx(0.2)
+    
+    
+def test_diagnostic_model_with_constant_feature():
+    train_df = pd.DataFrame({
+        "constant_feature": [5] * 8,
+        "useful_feature": [1, 2, 3, 4, 5, 6, 7, 8],
+        "target": [0, 0, 0, 0, 1, 1, 1, 1],
+    })
+
+    test_df = pd.DataFrame({
+        "constant_feature": [5] * 4,
+        "useful_feature": [2, 3, 6, 7],
+        "target": [0, 0, 1, 1],
+    })
+
+    result = run_diagnostic_model(
+        train_df,
+        test_df,
+        target_column="target",
+    )
+
+    assert result["task_type"] == "classification"
+    assert 0.0 <= result["score"] <= 1.0
+    assert result["feature_count"] == 2
+
+
+def test_constant_feature_has_zero_importance():
+    train_df = pd.DataFrame({
+        "constant_feature": [5] * 8,
+        "useful_feature": [1, 2, 3, 4, 5, 6, 7, 8],
+        "target": [0, 0, 0, 0, 1, 1, 1, 1],
+    })
+
+    test_df = pd.DataFrame({
+        "constant_feature": [5] * 4,
+        "useful_feature": [2, 3, 6, 7],
+        "target": [0, 0, 1, 1],
+    })
+
+    diagnostic_result = run_diagnostic_model(
+        train_df,
+        test_df,
+        target_column="target",
+    )
+
+    importance_result = analyze_feature_importance(
+        diagnostic_result
+    )
+
+    importance_by_feature = {
+        item["feature"]: item["importance"]
+        for item in importance_result["feature_importance"]
+    }
+
+    assert importance_by_feature["constant_feature"] == pytest.approx(
+        0.0,
+        abs=1e-10,
+    )
+
+
+def test_diagnostic_model_with_only_constant_features():
+    train_df = pd.DataFrame({
+        "constant_feature": [5] * 8,
+        "target": [0, 0, 0, 0, 1, 1, 1, 1],
+    })
+
+    test_df = pd.DataFrame({
+        "constant_feature": [5] * 4,
+        "target": [0, 1, 0, 1],
+    })
+
+    result = run_diagnostic_model(
+        train_df,
+        test_df,
+        target_column="target",
+    )
+
+    assert result["task_type"] == "classification"
+    assert 0.0 <= result["score"] <= 1.0
+    assert result["feature_columns"] == ["constant_feature"]
+
+
+def test_constant_target_is_rejected_by_diagnostic_model():
+    train_df = pd.DataFrame({
+        "feature": [1, 2, 3, 4, 5, 6],
+        "target": [1, 1, 1, 1, 1, 1],
+    })
+
+    test_df = pd.DataFrame({
+        "feature": [7, 8],
+        "target": [1, 1],
+    })
+
+    with pytest.raises(
+        ValueError,
+        match="at least two unique values",
+    ):
+        run_diagnostic_model(
+            train_df,
+            test_df,
+            target_column="target",
+        )
+        
+
+
+def test_all_missing_numerical_feature_rejected():
+    train_df = pd.DataFrame({
+        "feature": [float("nan")] * 8,
+        "target": [0, 0, 0, 0, 1, 1, 1, 1],
+    })
+
+    test_df = pd.DataFrame({
+        "feature": [float("nan")] * 4,
+        "target": [0, 0, 1, 1],
+    })
+
+    with pytest.raises(
+        ValueError,
+        match="no non-missing training values",
+    ):
+        run_diagnostic_model(
+            train_df,
+            test_df,
+            target_column="target",
+        )
+
+
+
+def test_missing_training_target_rejected():
+    train_df = pd.DataFrame({
+        "feature": [1, 2, 3, 4, 5, 6],
+        "target": [0, 0, None, 1, 1, 1],
+    })
+
+    test_df = pd.DataFrame({
+        "feature": [7, 8],
+        "target": [0, 1],
+    })
+
+    with pytest.raises(
+        ValueError,
+        match="Target data cannot contain missing values",
+    ):
+        run_diagnostic_model(
+            train_df,
+            test_df,
+            target_column="target",
+        )
+
+
+def test_single_class_training_split_rejected():
+    train_df = pd.DataFrame({
+        "feature": [1, 2, 3, 4],
+        "target": [0, 0, 0, 0],
+    })
+
+    test_df = pd.DataFrame({
+        "feature": [5, 6],
+        "target": [0, 1],
+    })
+
+    with pytest.raises(
+        ValueError,
+        match="at least two unique values",
+    ):
+        run_diagnostic_model(
+            train_df,
+            test_df,
+            target_column="target",
+        )
+

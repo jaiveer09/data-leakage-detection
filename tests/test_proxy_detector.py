@@ -420,3 +420,28 @@ def test_leaked_proxy_dataset_identifies_expected_candidates():
         "target_proxy",
         "inverse_target_proxy",
     }
+    
+    
+def test_constant_feature_is_not_identified_as_proxy():
+    df = pd.DataFrame({
+        "constant_feature": [10, 10, 10, 10, 10, 10],
+        "normal_feature": [1, 3, 2, 5, 4, 6],
+        "target": [0, 1, 0, 1, 0, 1],
+    })
+
+    correlation_result = analyze_numerical_target_correlation(
+        df,
+        "target",
+    )
+
+    candidate_result = identify_proxy_candidates(
+        correlation_result
+    )
+
+    candidate_names = {
+        candidate["feature"]
+        for candidate in candidate_result["candidates"]
+    }
+
+    assert "constant_feature" not in candidate_names
+    assert candidate_result["candidate_count"] == 0

@@ -117,3 +117,146 @@ def test_optional_columns_not_required():
     )
 
     assert result is True
+    
+    
+def test_load_completely_blank_csv(tmp_path):
+    csv_file = tmp_path / "blank.csv"
+    csv_file.write_text("")
+
+    with pytest.raises(ValueError, match="CSV file is empty"):
+        load_csv(csv_file)
+
+
+def test_load_csv_with_blank_header(tmp_path):
+    csv_file = tmp_path / "blank_header.csv"
+    csv_file.write_text(
+        "age,,target\n"
+        "25,50000,0\n"
+        "35,70000,1\n"
+    )
+
+    with pytest.raises(ValueError, match="blank column header"):
+        load_csv(csv_file)
+
+
+def test_load_csv_with_whitespace_header(tmp_path):
+    csv_file = tmp_path / "whitespace_header.csv"
+    csv_file.write_text(
+        "age,   ,target\n"
+        "25,50000,0\n"
+    )
+
+    with pytest.raises(ValueError, match="blank column header"):
+        load_csv(csv_file)
+
+
+def test_load_csv_with_all_missing_values(tmp_path):
+    csv_file = tmp_path / "all_missing.csv"
+    csv_file.write_text(
+        "age,income,target\n"
+        ",,\n"
+        ",,\n"
+    )
+
+    with pytest.raises(ValueError, match="no non-missing data"):
+        load_csv(csv_file)
+
+
+def test_load_csv_with_some_missing_values(tmp_path):
+    csv_file = tmp_path / "partial_missing.csv"
+    csv_file.write_text(
+        "age,income,target\n"
+        "25,,0\n"
+        "35,70000,1\n"
+    )
+
+    df = load_csv(csv_file)
+
+    assert len(df) == 2
+    assert pd.isna(df.loc[0, "income"])
+    assert df.loc[1, "income"] == 70000
+
+
+def test_duplicate_column_headers_rejected(tmp_path):
+    csv_file = tmp_path / "duplicate_headers.csv"
+    csv_file.write_text(
+        "age,age,target\n"
+        "25,50000,0\n"
+    )
+
+    with pytest.raises(ValueError, match="duplicate column headers"):
+        load_csv(csv_file)
+
+
+def test_malformed_row_with_extra_field(tmp_path):
+    csv_file = tmp_path / "extra_field.csv"
+    csv_file.write_text(
+        "age,income,target\n"
+        "25,50000,0,extra\n"
+    )
+
+    with pytest.raises(ValueError, match="malformed row"):
+        load_csv(csv_file)
+
+
+def test_malformed_row_with_missing_field(tmp_path):
+    csv_file = tmp_path / "missing_field.csv"
+    csv_file.write_text(
+        "age,income,target\n"
+        "25,50000\n"
+    )
+
+    with pytest.raises(ValueError, match="malformed row"):
+        load_csv(csv_file)
+
+
+def test_quoted_commas_are_accepted(tmp_path):
+    csv_file = tmp_path / "quoted_commas.csv"
+    csv_file.write_text(
+        "description,target\n"
+        '"New York, USA",1\n'
+        '"Phoenix, AZ",0\n'
+    )
+
+    df = load_csv(csv_file)
+
+    assert len(df) == 2
+    assert df.loc[0, "description"] == "New York, USA"
+
+
+def test_quoted_newlines_are_accepted(tmp_path):
+    csv_file = tmp_path / "quoted_newlines.csv"
+    csv_file.write_text(
+        "description,target\n"
+        '"First line\nSecond line",1\n'
+    )
+
+    df = load_csv(csv_file)
+
+    assert len(df) == 1
+    assert df.loc[0, "description"].replace("\r\n", "\n") == "First line\nSecond line"
+
+
+def test_streamlit_style_uploaded_file():
+    import io
+
+    uploaded_file = io.BytesIO(
+        b"age,income,target\n25,50000,0\n35,70000,1\n"
+    )
+
+    df = load_csv(uploaded_file)
+
+    assert len(df) == 2
+    assert df.columns.tolist() == ["age", "income", "target"]
+
+
+def test_utf8_bom_csv_accepted(tmp_path):
+    csv_file = tmp_path / "utf8_bom.csv"
+    csv_file.write_text(
+        "age,income,target\n25,50000,0\n",
+        encoding="utf-8-sig",
+    )
+
+    df = load_csv(csv_file)
+
+    assert df.columns.tolist() == ["age", "income", "target"]

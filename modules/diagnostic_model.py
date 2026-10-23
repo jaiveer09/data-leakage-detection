@@ -126,6 +126,18 @@ def run_diagnostic_model(
 
     X_train = train_df[feature_columns]
     X_test = test_df[feature_columns]
+    
+    all_missing_columns = [
+        column
+        for column in feature_columns
+        if X_train[column].isna().all()
+    ]
+
+    if all_missing_columns:
+        raise ValueError(
+            "Numerical feature columns have no non-missing training values: "
+            + ", ".join(all_missing_columns)
+        )
 
     if task_type == "classification":
         model = LogisticRegression(

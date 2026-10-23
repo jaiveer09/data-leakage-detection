@@ -272,3 +272,48 @@ def test_time_split_uses_chronological_order():
         pd.Timestamp("2026-04-01"),
         pd.Timestamp("2026-05-01"),
     ]
+    
+
+def test_time_split_rejects_missing_timestamp():
+    df = pd.DataFrame({
+        "date": [
+            "2026-01-01",
+            None,
+            "2026-01-03",
+            "2026-01-04",
+            "2026-01-05",
+        ],
+        "target": [0, 1, 0, 1, 0],
+    })
+
+    config = create_config(
+        target_column="target",
+        timestamp_column="date",
+        split_type="time",
+        test_size=0.2,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="missing or invalid timestamp",
+    ):
+        create_train_test_split(df, config)
+
+
+def test_random_split_rejects_insufficient_rows():
+    df = pd.DataFrame({
+        "feature": [10, 20],
+        "target": [0, 1],
+    })
+
+    config = create_config(
+        target_column="target",
+        split_type="random",
+        test_size=0.2,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Dataset is too small",
+    ):
+        create_train_test_split(df, config)
