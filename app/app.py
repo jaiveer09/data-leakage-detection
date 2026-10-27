@@ -1290,6 +1290,7 @@ if uploaded_file is not None:
                     data=report_json,
                     file_name="data_leakage_analysis_report.json",
                     mime="application/json",
+                    on_click="ignore",
                 )
                     
                 st.subheader("Column Statistics")
