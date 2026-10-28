@@ -784,14 +784,20 @@ if uploaded_file is not None:
 
                         comparison_chart = pd.DataFrame({
                             "Configuration": [
-                                "Without Selected Features",
-                                "With Selected Features",
+                                "Without Features",
+                                "With Features",
                             ],
                             "Score": [
                                 comparison_result["clean_score"],
                                 comparison_result["leaked_score"],
                             ],
                         })
+
+                        comparison_chart["Configuration"] = pd.Categorical(
+                            comparison_chart["Configuration"],
+                            categories=["Without Features", "With Features"],
+                            ordered=True,
+                        )
 
                         st.bar_chart(
                             comparison_chart.set_index("Configuration")
