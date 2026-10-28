@@ -317,3 +317,36 @@ def test_random_split_rejects_insufficient_rows():
         match="Dataset is too small",
     ):
         create_train_test_split(df, config)
+
+@pytest.mark.parametrize(
+    "row_count, expected_test_rows",
+    [
+        (10, 2),
+        (11, 3),
+        (17, 4),
+        (32561, 6513),
+        (17379, 3476),
+    ],
+)
+def test_random_split_estimate_matches_actual_split(
+    row_count,
+    expected_test_rows,
+):
+    df = pd.DataFrame({
+        "feature": range(row_count),
+        "target": [i % 2 for i in range(row_count)],
+    })
+
+    config = create_config(
+        target_column="target",
+        split_type="random",
+        test_size=0.2,
+    )
+
+    estimate = validate_split_configuration(df, config)
+    train_df, test_df = create_train_test_split(df, config)
+
+    assert estimate["test_rows"] == expected_test_rows
+    assert estimate["train_rows"] == row_count - expected_test_rows
+    assert estimate["test_rows"] == len(test_df)
+    assert estimate["train_rows"] == len(train_df)

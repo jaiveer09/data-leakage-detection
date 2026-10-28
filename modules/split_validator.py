@@ -1,3 +1,4 @@
+import math
 import pandas as pd
 from sklearn.model_selection import train_test_split, GroupShuffleSplit
 
@@ -25,13 +26,15 @@ def validate_split_configuration(df, config):
 def validate_random_split(df, config):
     test_size = config["test_size"]
 
-    test_rows = int(len(df) * test_size)
-    train_rows = len(df) - test_rows
-
-    if test_rows < 1:
+    # Preserve the existing minimum dataset-size restriction.   
+    if int(len(df) * test_size) < 1:
         raise ValueError(
             "Dataset is too small for the selected test size."
         )
+
+    # Match scikit-learn's rounding for fractional test sizes.
+    test_rows = math.ceil(len(df) * test_size)
+    train_rows = len(df) - test_rows
 
     return {
         "split_type": "random",
