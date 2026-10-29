@@ -146,7 +146,7 @@ if uploaded_file is not None:
             if group_selection == "None"
             else group_selection
         )
-        
+
         st.subheader("Evaluation Configuration")
 
         split_type = st.selectbox(
@@ -169,7 +169,7 @@ if uploaded_file is not None:
             value=5,
             step=1,
         )
-        
+
         cv_strategy = st.selectbox(
             "Cross-Validation Strategy",
             options=[
@@ -178,7 +178,7 @@ if uploaded_file is not None:
                 "group",
             ],
         )
-        
+
         st.subheader("Preprocessing Configuration")
 
         use_scaling = st.checkbox(
@@ -237,10 +237,10 @@ if uploaded_file is not None:
                 "unavailable at prediction time."
             ),
         )
-        
+
         if st.button("Analyze Dataset"):
             try:
-                
+
                 preprocessing_steps = []
 
                 if use_scaling:
@@ -254,14 +254,14 @@ if uploaded_file is not None:
                         "name": "Missing-Value Imputation",
                         "fit_scope": imputation_scope,
                     })
-                    
+
                 validate_columns(
                     df,
                     target_column,
                     timestamp_column,
                     group_column,
                 )
-                
+
                 config = create_config(
                     target_column=target_column,
                     timestamp_column=timestamp_column,
@@ -270,7 +270,7 @@ if uploaded_file is not None:
                     test_size=test_size,
                     cv_folds=int(cv_folds),
                 )
-                
+
                 preprocessing_result = (
                     validate_preprocessing_configuration(
                         preprocessing_steps
@@ -289,9 +289,9 @@ if uploaded_file is not None:
                     df,
                     config,
                 )
-                
+
                 train_df, test_df = create_train_test_split(df, config)
-                
+
                 group_result = None
 
                 if config["group_column"] is not None:
@@ -300,7 +300,7 @@ if uploaded_file is not None:
                         test_df,
                         config["group_column"],
                     )
-                
+
                 temporal_result = None
 
                 if config["timestamp_column"] is not None:
@@ -310,7 +310,7 @@ if uploaded_file is not None:
                         config["timestamp_column"],
                         config["split_type"],
                     )
-                
+
                 proxy_correlation_result = None
                 proxy_candidate_result = None
                 leakage_findings = []
@@ -326,7 +326,7 @@ if uploaded_file is not None:
                     proxy_candidate_result = identify_proxy_candidates(
                         proxy_correlation_result
                     )
-                
+
 
                 if temporal_result is not None:
                     leakage_findings.append(
@@ -481,11 +481,11 @@ if uploaded_file is not None:
                         },
                     )
                 )
-                    
+
                 overall_risk_result = assess_overall_risk(
                     leakage_findings
                 )
-                    
+
                 diagnostic_result = None
                 feature_importance_result = None
                 diagnostic_error = None
@@ -520,7 +520,7 @@ if uploaded_file is not None:
                     diagnostic_error = str(
                         diagnostic_exception
                     )
-                    
+
                 comparison_result = None
                 comparison_error = None
 
@@ -536,778 +536,836 @@ if uploaded_file is not None:
 
                     except ValueError as comparison_exception:
                         comparison_error = str(comparison_exception)
-                        
+
                 statistics = get_column_statistics(df)
 
                 profile = profile_dataset(
                     df,
                     target_column,
                 )
-                
-                st.subheader("Leakage Findings Summary")
 
-                risky_finding_count = sum(
-                    finding["risk_detected"]
-                    for finding in leakage_findings
-                )
+                # Organize analysis outputs into a tabbed dashboard.
+                (
+                    overview_tab,
+                    diagnostic_tab,
+                    comparison_tab,
+                    profile_tab,
+                    pipeline_tab,
+                    split_tab,
+                    temporal_tab,
+                    group_tab,
+                    proxy_tab,
+                    statistics_tab,
+                    report_tab,
+                ) = st.tabs([
+                    "Overview",
+                    "Diagnostic Modeling",
+                    "Model Comparison",
+                    "Dataset Profile",
+                    "Pipeline Validation",
+                    "Split Validation",
+                    "Temporal Leakage",
+                    "Group Leakage",
+                    "Proxy Leakage",
+                    "Statistics & Distributions",
+                    "JSON Report",
+                ])
 
-                summary_col1, summary_col2 = st.columns(2)
+                with overview_tab:
+                    st.subheader("Leakage Findings Summary")
 
-                summary_col1.metric(
-                    "Checks Performed",
-                    len(leakage_findings),
-                )
-
-                summary_col2.metric(
-                    "Risks Identified",
-                    risky_finding_count,
-                )
-                
-                st.write("**Overall Leakage Risk**")
-
-                overall_risk = overall_risk_result[
-                    "overall_risk"
-                ]
-
-                if overall_risk == "high":
-                    st.error(
-                        overall_risk_result["summary"]
-                    )
-                elif overall_risk == "medium":
-                    st.warning(
-                        overall_risk_result["summary"]
-                    )
-                elif overall_risk == "low":
-                    st.warning(
-                        overall_risk_result["summary"]
-                    )
-                else:
-                    st.success(
-                        overall_risk_result["summary"]
+                    risky_finding_count = sum(
+                        finding["risk_detected"]
+                        for finding in leakage_findings
                     )
 
-                severity_counts = overall_risk_result[
-                    "severity_counts"
-                ]
+                    summary_col1, summary_col2 = st.columns(2)
 
-                risk_col1, risk_col2, risk_col3 = st.columns(3)
-
-                risk_col1.metric(
-                    "High Risk Findings",
-                    severity_counts["high"],
-                )
-
-                risk_col2.metric(
-                    "Medium Risk Findings",
-                    severity_counts["medium"],
-                )
-
-                risk_col3.metric(
-                    "Low Risk Findings",
-                    severity_counts["low"],
-                )
-
-                for finding in leakage_findings:
-                    st.write(
-                        f"**{finding['category']} — "
-                        f"{finding['title']}**"
+                    summary_col1.metric(
+                        "Checks Performed",
+                        len(leakage_findings),
                     )
 
-                    st.write(
-                        "**Severity:**",
-                        finding["severity"].capitalize(),
+                    summary_col2.metric(
+                        "Risks Identified",
+                        risky_finding_count,
                     )
 
-                    if finding["risk_detected"]:
-                        st.warning(finding["message"])
-                    else:
-                        st.success(finding["message"])
+                    st.write("**Overall Leakage Risk**")
 
-                    if finding["recommendation"]:
-                        st.info(
-                            "Recommendation: "
-                            + finding["recommendation"]
+                    overall_risk = overall_risk_result[
+                        "overall_risk"
+                    ]
+
+                    if overall_risk == "high":
+                        st.error(
+                            overall_risk_result["summary"]
                         )
-
-                    with st.expander("View evidence"):
-                        if finding["details"]:
-                            st.json(finding["details"])
-                        else:
-                            st.write(
-                                "No additional evidence details "
-                                "are available."
-                            )
-
-                st.subheader("Diagnostic Model Analysis")
-
-                if diagnostic_result is None:
-                    st.info(
-                        "Diagnostic modeling could not be "
-                        "performed for this dataset."
-                    )
-
-                    if diagnostic_error:
-                        st.write(
-                            "**Reason:**",
-                            diagnostic_error,
-                        )
-
-                else:
-                    diagnostic_col1, diagnostic_col2, diagnostic_col3 = (
-                        st.columns(3)
-                    )
-
-                    diagnostic_col1.metric(
-                        "Task Type",
-                        diagnostic_result[
-                            "task_type"
-                        ].capitalize(),
-                    )
-
-                    diagnostic_col2.metric(
-                        "Model",
-                        diagnostic_result[
-                            "model_name"
-                        ],
-                    )
-
-                    diagnostic_col3.metric(
-                        diagnostic_result[
-                            "metric_name"
-                        ].upper(),
-                        f"{diagnostic_result['score']:.4f}",
-                    )
-
-                    st.write(
-                        "**Features Used:**",
-                        diagnostic_result[
-                            "feature_columns"
-                        ],
-                    )
-
-                    st.write(
-                        "**Training Rows:**",
-                        diagnostic_result["train_rows"],
-                    )
-
-                    st.write(
-                        "**Testing Rows:**",
-                        diagnostic_result["test_rows"],
-                    )
-
-                    if feature_importance_result is not None:
-                        st.write(
-                            "**Diagnostic Feature Importance**"
-                        )
-
-                        importance_df = pd.DataFrame(
-                            feature_importance_result[
-                                "feature_importance"
-                            ]
-                        )
-
-                        if not importance_df.empty:
-                            importance_df = importance_df.rename(
-                                columns={
-                                    "feature": "Feature",
-                                    "importance": "Importance",
-                                }
-                            )
-
-                            st.dataframe(
-                                importance_df,
-                                use_container_width=True,
-                                hide_index=True,
-                            )
-
-                            chart_data = (
-                                importance_df
-                                .set_index("Feature")
-                                ["Importance"]
-                            )
-
-                            st.bar_chart(chart_data)
-
-                            st.info(
-                                "Feature importance values are based "
-                                "on the absolute model coefficients. "
-                                "Higher importance indicates greater "
-                                "influence on the diagnostic model, "
-                                "but does not by itself prove leakage."
-                            )
-                        else:
-                            st.info(
-                                "No feature importance values "
-                                "are available."
-                            )
-                            
-                if selected_leakage_features:
-                    st.subheader("Clean-versus-Leaked Model Comparison")
-
-                    if comparison_result is None:
+                    elif overall_risk == "medium":
                         st.warning(
-                            "Model comparison could not be completed."
+                            overall_risk_result["summary"]
                         )
-
-                        if comparison_error:
-                            st.write("**Reason:**", comparison_error)
-
-                    else:
-                        st.write(
-                            "**Suspected Leakage Features:**",
-                            selected_leakage_features,
-                        )
-
-                        comparison_col1, comparison_col2, comparison_col3 = (
-                            st.columns(3)
-                        )
-
-                        comparison_col1.metric(
-                            "Without Selected Features",
-                            f"{comparison_result['clean_score']:.4f}",
-                        )
-
-                        comparison_col2.metric(
-                            "With Selected Features",
-                            f"{comparison_result['leaked_score']:.4f}",
-                        )
-
-                        comparison_col3.metric(
-                            "Score Difference",
-                            f"{comparison_result['score_difference']:+.4f}",
-                        )
-
-                        st.write(
-                            "**Evaluation Metric:**",
-                            comparison_result["metric_name"].upper(),
-                        )
-
-                        comparison_chart = pd.DataFrame({
-                            "Configuration": [
-                                "Without Features",
-                                "With Features",
-                            ],
-                            "Score": [
-                                comparison_result["clean_score"],
-                                comparison_result["leaked_score"],
-                            ],
-                        })
-
-                        comparison_chart["Configuration"] = pd.Categorical(
-                            comparison_chart["Configuration"],
-                            categories=["Without Features", "With Features"],
-                            ordered=True,
-                        )
-
-                        st.bar_chart(
-                            comparison_chart.set_index("Configuration")
-                        )
-
-                        if comparison_result["performance_inflated"]:
-                            st.warning(
-                                "Including the selected features increased "
-                                "the diagnostic model score. Investigate "
-                                "whether these features would legitimately "
-                                "be available at prediction time."
-                            )
-                        else:
-                            st.info(
-                                "Including the selected features did not "
-                                "increase the diagnostic model score."
-                            )
-
-                        st.caption(
-                            "A performance difference alone does not "
-                            "establish whether data leakage exists."
-                        )
-                            
-                st.subheader("Dataset Profile")
-
-                col1, col2, col3 = st.columns(3)
-
-                col1.metric("Rows", profile["rows"])
-                col2.metric("Columns", profile["columns"])
-                col3.metric(
-                    "Duplicate Rows",
-                    profile["duplicate_rows"],
-                )
-
-                st.write("**Column Data Types**")
-                st.json(profile["data_types"])
-
-                st.write("**Missing Values**")
-                st.json(profile["missing_values"])
-
-                st.write(
-                    "**Numerical Columns:**",
-                    profile["numerical_columns"],
-                )
-
-                st.write(
-                    "**Categorical Columns:**",
-                    profile["categorical_columns"],
-                )
-
-                st.write(
-                    "**Target Unique Values:**",
-                    profile["target_unique_values"],
-                )
-
-                st.write(
-                    "**Target Missing Values:**",
-                    profile["target_missing_values"],
-                )
-                
-                st.subheader("Evaluation Settings")
-
-                st.write("**Split Type:**", config["split_type"])
-                st.write("**Test Size:**", config["test_size"])
-                st.write("**Cross-Validation Folds:**", config["cv_folds"])
-                
-                st.subheader("Pipeline Validation")
-
-                st.write(
-                    "**Preprocessing Leakage Assessment**"
-                )
-
-                if preprocessing_result["risk_detected"]:
-                    st.warning(
-                        preprocessing_result["summary"]
-                    )
-                else:
-                    st.success(
-                        preprocessing_result["summary"]
-                    )
-
-                for finding in preprocessing_result["findings"]:
-                    st.write(
-                        f"**{finding['step']}**"
-                    )
-
-                    if finding["risk_detected"]:
-                        st.warning(finding["message"])
-                    else:
-                        st.success(finding["message"])
-
-                    if finding["recommendation"]:
-                        st.info(
-                            "Recommendation: "
-                            + finding["recommendation"]
-                        )
-
-                st.write(
-                    "**Cross-Validation Assessment**"
-                )
-
-                if cross_validation_result["risk_detected"]:
-                    st.warning(
-                        cross_validation_result["message"]
-                    )
-                else:
-                    st.success(
-                        cross_validation_result["message"]
-                    )
-
-                st.write(
-                    "**Selected CV Strategy:**",
-                    cross_validation_result["cv_strategy"],
-                )
-
-                st.write(
-                    "**Recommended CV Strategy:**",
-                    cross_validation_result[
-                        "recommended_strategy"
-                    ],
-                )
-
-                st.write(
-                    "**CV Folds:**",
-                    cross_validation_result["cv_folds"],
-                )
-
-                if cross_validation_result["recommendation"]:
-                    st.info(
-                        "Recommendation: "
-                        + cross_validation_result[
-                            "recommendation"
-                        ]
-                    )
-                    
-                st.subheader("Split Validation")
-
-                st.success("Split configuration is valid.")
-
-                if split_validation["split_type"] == "random":
-                    st.write(
-                        "**Estimated Training Rows:**",
-                        split_validation["train_rows"],
-                    )
-                    st.write(
-                        "**Estimated Testing Rows:**",
-                        split_validation["test_rows"],
-                    )
-
-                elif split_validation["split_type"] == "time":
-                    st.write(
-                        "**Timestamp Column:**",
-                        split_validation["timestamp_column"],
-                    )
-                    st.write(
-                        "**Estimated Training Rows:**",
-                        split_validation["train_rows"],
-                    )
-                    st.write(
-                        "**Estimated Testing Rows:**",
-                        split_validation["test_rows"],
-                    )
-                    st.write(
-                        "**Earliest Timestamp:**",
-                        split_validation["earliest_timestamp"],
-                    )
-                    st.write(
-                        "**Latest Timestamp:**",
-                        split_validation["latest_timestamp"],
-                    )
-
-                elif split_validation["split_type"] == "group":
-                    st.write(
-                        "**Group Column:**",
-                        split_validation["group_column"],
-                    )
-                    st.write(
-                        "**Unique Groups:**",
-                        split_validation["unique_groups"],
-                    )
-
-                st.subheader("Train / Test Split")
-
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.write("**Training Set**")
-                    st.write(f"Rows: {len(train_df)}")
-                    st.dataframe(train_df, use_container_width=True)
-
-                with col2:
-                    st.write("**Testing Set**")
-                    st.write(f"Rows: {len(test_df)}")
-                    st.dataframe(test_df, use_container_width=True)
-                    
-                if temporal_result is not None:
-                    st.subheader("Temporal Leakage Analysis")
-
-                    st.write("**Split Strategy Assessment**")
-
-                    if temporal_result["configuration_risk"]:
+                    elif overall_risk == "low":
                         st.warning(
-                            temporal_result["configuration_message"]
+                            overall_risk_result["summary"]
                         )
                     else:
                         st.success(
-                            temporal_result["configuration_message"]
+                            overall_risk_result["summary"]
                         )
 
-                    st.write("**Observed Train / Test Analysis**")
+                    severity_counts = overall_risk_result[
+                        "severity_counts"
+                    ]
 
-                    if temporal_result["temporal_overlap"]:
-                        st.error(temporal_result["message"])
+                    risk_col1, risk_col2, risk_col3 = st.columns(3)
+
+                    risk_col1.metric(
+                        "High Risk Findings",
+                        severity_counts["high"],
+                    )
+
+                    risk_col2.metric(
+                        "Medium Risk Findings",
+                        severity_counts["medium"],
+                    )
+
+                    risk_col3.metric(
+                        "Low Risk Findings",
+                        severity_counts["low"],
+                    )
+
+                    for finding in leakage_findings:
+                        st.write(
+                            f"**{finding['category']} — "
+                            f"{finding['title']}**"
+                        )
+
+                        st.write(
+                            "**Severity:**",
+                            finding["severity"].capitalize(),
+                        )
+
+                        if finding["risk_detected"]:
+                            st.warning(finding["message"])
+                        else:
+                            st.success(finding["message"])
+
+                        if finding["recommendation"]:
+                            st.info(
+                                "Recommendation: "
+                                + finding["recommendation"]
+                            )
+
+                        with st.expander("View evidence"):
+                            if finding["details"]:
+                                st.json(finding["details"])
+                            else:
+                                st.write(
+                                    "No additional evidence details "
+                                    "are available."
+                                )
+
+                with diagnostic_tab:
+                    st.subheader("Diagnostic Model Analysis")
+
+                    if diagnostic_result is None:
+                        st.info(
+                            "Diagnostic modeling could not be "
+                            "performed for this dataset."
+                        )
+
+                        if diagnostic_error:
+                            st.write(
+                                "**Reason:**",
+                                diagnostic_error,
+                            )
+
                     else:
-                        st.success(temporal_result["message"])
+                        diagnostic_col1, diagnostic_col2, diagnostic_col3 = (
+                            st.columns(3)
+                        )
+
+                        diagnostic_col1.metric(
+                            "Task Type",
+                            diagnostic_result[
+                                "task_type"
+                            ].capitalize(),
+                        )
+
+                        diagnostic_col2.metric(
+                            "Model",
+                            diagnostic_result[
+                                "model_name"
+                            ],
+                        )
+
+                        diagnostic_col3.metric(
+                            diagnostic_result[
+                                "metric_name"
+                            ].upper(),
+                            f"{diagnostic_result['score']:.4f}",
+                        )
+
+                        st.write(
+                            "**Features Used:**",
+                            diagnostic_result[
+                                "feature_columns"
+                            ],
+                        )
+
+                        st.write(
+                            "**Training Rows:**",
+                            diagnostic_result["train_rows"],
+                        )
+
+                        st.write(
+                            "**Testing Rows:**",
+                            diagnostic_result["test_rows"],
+                        )
+
+                        if feature_importance_result is not None:
+                            st.write(
+                                "**Diagnostic Feature Importance**"
+                            )
+
+                            importance_df = pd.DataFrame(
+                                feature_importance_result[
+                                    "feature_importance"
+                                ]
+                            )
+
+                            if not importance_df.empty:
+                                importance_df = importance_df.rename(
+                                    columns={
+                                        "feature": "Feature",
+                                        "importance": "Importance",
+                                    }
+                                )
+
+                                st.dataframe(
+                                    importance_df,
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
+
+                                chart_data = (
+                                    importance_df
+                                    .set_index("Feature")
+                                    ["Importance"]
+                                )
+
+                                st.bar_chart(chart_data)
+
+                                st.info(
+                                    "Feature importance values are based "
+                                    "on the absolute model coefficients. "
+                                    "Higher importance indicates greater "
+                                    "influence on the diagnostic model, "
+                                    "but does not by itself prove leakage."
+                                )
+                            else:
+                                st.info(
+                                    "No feature importance values "
+                                    "are available."
+                                )
+
+                with comparison_tab:
+                    if selected_leakage_features:
+                        st.subheader("Clean-versus-Leaked Model Comparison")
+
+                        if comparison_result is None:
+                            st.warning(
+                                "Model comparison could not be completed."
+                            )
+
+                            if comparison_error:
+                                st.write("**Reason:**", comparison_error)
+
+                        else:
+                            st.write(
+                                "**Suspected Leakage Features:**",
+                                selected_leakage_features,
+                            )
+
+                            comparison_col1, comparison_col2, comparison_col3 = (
+                                st.columns(3)
+                            )
+
+                            comparison_col1.metric(
+                                "Without Selected Features",
+                                f"{comparison_result['clean_score']:.4f}",
+                            )
+
+                            comparison_col2.metric(
+                                "With Selected Features",
+                                f"{comparison_result['leaked_score']:.4f}",
+                            )
+
+                            comparison_col3.metric(
+                                "Score Difference",
+                                f"{comparison_result['score_difference']:+.4f}",
+                            )
+
+                            st.write(
+                                "**Evaluation Metric:**",
+                                comparison_result["metric_name"].upper(),
+                            )
+
+                            comparison_chart = pd.DataFrame({
+                                "Configuration": [
+                                    "Without Features",
+                                    "With Features",
+                                ],
+                                "Score": [
+                                    comparison_result["clean_score"],
+                                    comparison_result["leaked_score"],
+                                ],
+                            })
+
+                            comparison_chart["Configuration"] = pd.Categorical(
+                                comparison_chart["Configuration"],
+                                categories=["Without Features", "With Features"],
+                                ordered=True,
+                            )
+
+                            st.bar_chart(
+                                comparison_chart.set_index("Configuration")
+                            )
+
+                            if comparison_result["performance_inflated"]:
+                                st.warning(
+                                    "Including the selected features increased "
+                                    "the diagnostic model score. Investigate "
+                                    "whether these features would legitimately "
+                                    "be available at prediction time."
+                                )
+                            else:
+                                st.info(
+                                    "Including the selected features did not "
+                                    "increase the diagnostic model score."
+                                )
+
+                            st.caption(
+                                "A performance difference alone does not "
+                                "establish whether data leakage exists."
+                            )
+                    else:
+                        st.info(
+                            "No suspected leakage features were selected. "
+                            "Select one or more numerical features under "
+                            "Suspected Leakage Features in Model Performance "
+                            "Comparison to enable this analysis."
+                        )
+
+                with profile_tab:
+                    st.subheader("Dataset Profile")
+
+                    col1, col2, col3 = st.columns(3)
+
+                    col1.metric("Rows", profile["rows"])
+                    col2.metric("Columns", profile["columns"])
+                    col3.metric(
+                        "Duplicate Rows",
+                        profile["duplicate_rows"],
+                    )
+
+                    st.write("**Column Data Types**")
+                    st.json(profile["data_types"])
+
+                    st.write("**Missing Values**")
+                    st.json(profile["missing_values"])
+
+                    st.write(
+                        "**Numerical Columns:**",
+                        profile["numerical_columns"],
+                    )
+
+                    st.write(
+                        "**Categorical Columns:**",
+                        profile["categorical_columns"],
+                    )
+
+                    st.write(
+                        "**Target Unique Values:**",
+                        profile["target_unique_values"],
+                    )
+
+                    st.write(
+                        "**Target Missing Values:**",
+                        profile["target_missing_values"],
+                    )
+
+
+                with pipeline_tab:
+                    st.subheader("Pipeline Validation")
+
+                    st.subheader("Evaluation Settings")
+
+
+                    st.write("**Split Type:**", config["split_type"])
+                    st.write("**Test Size:**", config["test_size"])
+                    st.write("**Cross-Validation Folds:**", config["cv_folds"])
+
+                    st.write(
+                        "**Preprocessing Leakage Assessment**"
+                    )
+
+                    if preprocessing_result["risk_detected"]:
+                        st.warning(
+                            preprocessing_result["summary"]
+                        )
+                    else:
+                        st.success(
+                            preprocessing_result["summary"]
+                        )
+
+                    for finding in preprocessing_result["findings"]:
+                        st.write(
+                            f"**{finding['step']}**"
+                        )
+
+                        if finding["risk_detected"]:
+                            st.warning(finding["message"])
+                        else:
+                            st.success(finding["message"])
+
+                        if finding["recommendation"]:
+                            st.info(
+                                "Recommendation: "
+                                + finding["recommendation"]
+                            )
+
+                    st.write(
+                        "**Cross-Validation Assessment**"
+                    )
+
+                    if cross_validation_result["risk_detected"]:
+                        st.warning(
+                            cross_validation_result["message"]
+                        )
+                    else:
+                        st.success(
+                            cross_validation_result["message"]
+                        )
+
+                    st.write(
+                        "**Selected CV Strategy:**",
+                        cross_validation_result["cv_strategy"],
+                    )
+
+                    st.write(
+                        "**Recommended CV Strategy:**",
+                        cross_validation_result[
+                            "recommended_strategy"
+                        ],
+                    )
+
+                    st.write(
+                        "**CV Folds:**",
+                        cross_validation_result["cv_folds"],
+                    )
+
+                    if cross_validation_result["recommendation"]:
+                        st.info(
+                            "Recommendation: "
+                            + cross_validation_result[
+                                "recommendation"
+                            ]
+                        )
+
+                with split_tab:
+                    st.subheader("Split Validation")
+
+                    st.success("Split configuration is valid.")
+
+                    if split_validation["split_type"] == "random":
+                        st.write(
+                            "**Estimated Training Rows:**",
+                            split_validation["train_rows"],
+                        )
+                        st.write(
+                            "**Estimated Testing Rows:**",
+                            split_validation["test_rows"],
+                        )
+
+                    elif split_validation["split_type"] == "time":
+                        st.write(
+                            "**Timestamp Column:**",
+                            split_validation["timestamp_column"],
+                        )
+                        st.write(
+                            "**Estimated Training Rows:**",
+                            split_validation["train_rows"],
+                        )
+                        st.write(
+                            "**Estimated Testing Rows:**",
+                            split_validation["test_rows"],
+                        )
+                        st.write(
+                            "**Earliest Timestamp:**",
+                            split_validation["earliest_timestamp"],
+                        )
+                        st.write(
+                            "**Latest Timestamp:**",
+                            split_validation["latest_timestamp"],
+                        )
+
+                    elif split_validation["split_type"] == "group":
+                        st.write(
+                            "**Group Column:**",
+                            split_validation["group_column"],
+                        )
+                        st.write(
+                            "**Unique Groups:**",
+                            split_validation["unique_groups"],
+                        )
+
+                    st.subheader("Train / Test Split")
 
                     col1, col2 = st.columns(2)
 
                     with col1:
-                        st.write(
-                            "**Earliest Training Timestamp:**",
-                            temporal_result[
-                                "earliest_train_timestamp"
-                            ],
-                        )
-
-                        st.write(
-                            "**Latest Training Timestamp:**",
-                            temporal_result[
-                                "latest_train_timestamp"
-                            ],
-                        )
+                        st.write("**Training Set**")
+                        st.write(f"Rows: {len(train_df)}")
+                        st.dataframe(train_df, use_container_width=True)
 
                     with col2:
-                        st.write(
-                            "**Earliest Testing Timestamp:**",
-                            temporal_result[
-                                "earliest_test_timestamp"
-                            ],
-                        )
+                        st.write("**Testing Set**")
+                        st.write(f"Rows: {len(test_df)}")
+                        st.dataframe(test_df, use_container_width=True)
 
-                        st.write(
-                            "**Latest Testing Timestamp:**",
-                            temporal_result[
-                                "latest_test_timestamp"
-                            ],
-                        )
+                with temporal_tab:
+                    if temporal_result is not None:
+                        st.subheader("Temporal Leakage Analysis")
 
-                    st.write(
-                        "**Observed Temporal Overlap:**",
-                        "Yes"
-                        if temporal_result["temporal_overlap"]
-                        else "No",
-                    )
+                        st.write("**Split Strategy Assessment**")
 
-                    st.write(
-                        "**Severity:**",
-                        temporal_result["severity"].capitalize(),
-                    )
+                        if temporal_result["configuration_risk"]:
+                            st.warning(
+                                temporal_result["configuration_message"]
+                            )
+                        else:
+                            st.success(
+                                temporal_result["configuration_message"]
+                            )
 
-                    if temporal_result["recommendation"]:
-                        st.info(
-                            "Recommendation: "
-                            + temporal_result["recommendation"]
-                        )
-                
-                if group_result is not None:
-                    st.subheader("Group Leakage Analysis")
+                        st.write("**Observed Train / Test Analysis**")
 
-                    if group_result["leakage_detected"]:
-                        st.error(group_result["message"])
-                    else:
-                        st.success(group_result["message"])
+                        if temporal_result["temporal_overlap"]:
+                            st.error(temporal_result["message"])
+                        else:
+                            st.success(temporal_result["message"])
 
-                    col1, col2, col3 = st.columns(3)
+                        col1, col2 = st.columns(2)
 
-                    col1.metric(
-                        "Training Groups",
-                        group_result["train_group_count"],
-                    )
-
-                    col2.metric(
-                        "Testing Groups",
-                        group_result["test_group_count"],
-                    )
-
-                    col3.metric(
-                        "Overlapping Groups",
-                        group_result["overlap_count"],
-                    )
-
-                    st.write(
-                        "**Group Column:**",
-                        group_result["group_column"],
-                    )
-
-                    st.write(
-                        "**Observed Group Leakage:**",
-                        "Yes"
-                        if group_result["leakage_detected"]
-                        else "No",
-                    )
-
-                    st.write(
-                        "**Severity:**",
-                        group_result["severity"].capitalize(),
-                    )
-
-                    if group_result["overlapping_groups"]:
-                        st.write(
-                            "**Overlapping Group Values:**",
-                            group_result["overlapping_groups"],
-                        )
-
-                    if group_result["recommendation"]:
-                        st.info(
-                            "Recommendation: "
-                            + group_result["recommendation"]
-                        )
-                st.subheader("Proxy Leakage Analysis")
-
-                if proxy_correlation_result is None:
-                    st.info(
-                        "Proxy leakage correlation analysis was not performed "
-                        "because the selected target column is not numerical."
-                    )
-
-                else:
-                    st.write(
-                        "**Numerical Feature-to-Target Correlations**"
-                    )
-
-                    correlation_rows = []
-
-                    for item in proxy_correlation_result["correlations"]:
-                        correlation_rows.append({
-                            "Feature": item["feature"],
-                            "Correlation": item["correlation"],
-                            "Absolute Correlation": (
-                                item["absolute_correlation"]
-                            ),
-                        })
-                    if correlation_rows:
-                        correlation_df = pd.DataFrame(
-                            correlation_rows
-                        )
-
-                        st.dataframe(
-                            correlation_df,
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-
-                        valid_correlation_rows = [
-                            item
-                            for item in proxy_correlation_result[
-                                "correlations"
-                            ]
-                            if item["correlation"] is not None
-                        ]
-
-                        if valid_correlation_rows:
+                        with col1:
                             st.write(
-                                "**Feature-to-Target Correlation Heatmap**"
+                                "**Earliest Training Timestamp:**",
+                                temporal_result[
+                                    "earliest_train_timestamp"
+                                ],
                             )
 
-                            heatmap_data = pd.DataFrame(
-                                {
-                                    item["feature"]: [
-                                        item["correlation"]
-                                    ]
-                                    for item in valid_correlation_rows
-                                },
-                                index=[target_column],
+                            st.write(
+                                "**Latest Training Timestamp:**",
+                                temporal_result[
+                                    "latest_train_timestamp"
+                                ],
                             )
 
-                            figure, axis = plt.subplots(
-                                figsize=(
-                                    max(
-                                        6,
-                                        len(valid_correlation_rows) * 1.2,
-                                    ),
-                                    1.8,
+                        with col2:
+                            st.write(
+                                "**Earliest Testing Timestamp:**",
+                                temporal_result[
+                                    "earliest_test_timestamp"
+                                ],
+                            )
+
+                            st.write(
+                                "**Latest Testing Timestamp:**",
+                                temporal_result[
+                                    "latest_test_timestamp"
+                                ],
+                            )
+
+                        st.write(
+                            "**Observed Temporal Overlap:**",
+                            "Yes"
+                            if temporal_result["temporal_overlap"]
+                            else "No",
+                        )
+
+                        st.write(
+                            "**Severity:**",
+                            temporal_result["severity"].capitalize(),
+                        )
+
+                        if temporal_result["recommendation"]:
+                            st.info(
+                                "Recommendation: "
+                                + temporal_result["recommendation"]
+                            )
+                    else:
+                        st.info(
+                            "No timestamp column was selected. "
+                            "Select a timestamp column in Column Configuration "
+                            "to enable temporal leakage analysis."
+                        )
+                with group_tab:
+                    if group_result is not None:
+                        st.subheader("Group Leakage Analysis")
+
+                        if group_result["leakage_detected"]:
+                            st.error(group_result["message"])
+                        else:
+                            st.success(group_result["message"])
+
+                        col1, col2, col3 = st.columns(3)
+
+                        col1.metric(
+                            "Training Groups",
+                            group_result["train_group_count"],
+                        )
+
+                        col2.metric(
+                            "Testing Groups",
+                            group_result["test_group_count"],
+                        )
+
+                        col3.metric(
+                            "Overlapping Groups",
+                            group_result["overlap_count"],
+                        )
+
+                        st.write(
+                            "**Group Column:**",
+                            group_result["group_column"],
+                        )
+
+                        st.write(
+                            "**Observed Group Leakage:**",
+                            "Yes"
+                            if group_result["leakage_detected"]
+                            else "No",
+                        )
+
+                        st.write(
+                            "**Severity:**",
+                            group_result["severity"].capitalize(),
+                        )
+
+                        if group_result["overlapping_groups"]:
+                            st.write(
+                                "**Overlapping Group Values:**",
+                                group_result["overlapping_groups"],
+                            )
+
+                        if group_result["recommendation"]:
+                            st.info(
+                                "Recommendation: "
+                                + group_result["recommendation"]
+                            )
+                    else:
+                        st.info(
+                            "No group/entity column was selected. "
+                            "Select a group column in Column Configuration "
+                            "to enable group leakage analysis."
+                        )
+                with proxy_tab:
+                    st.subheader("Proxy Leakage Analysis")
+
+                    if proxy_correlation_result is None:
+                        st.info(
+                            "Proxy leakage correlation analysis was not performed "
+                            "because the selected target column is not numerical."
+                        )
+
+                    else:
+                        st.write(
+                            "**Numerical Feature-to-Target Correlations**"
+                        )
+
+                        correlation_rows = []
+
+                        for item in proxy_correlation_result["correlations"]:
+                            correlation_rows.append({
+                                "Feature": item["feature"],
+                                "Correlation": item["correlation"],
+                                "Absolute Correlation": (
+                                    item["absolute_correlation"]
+                                ),
+                            })
+                        if correlation_rows:
+                            correlation_df = pd.DataFrame(
+                                correlation_rows
+                            )
+
+                            st.dataframe(
+                                correlation_df,
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+
+                            valid_correlation_rows = [
+                                item
+                                for item in proxy_correlation_result[
+                                    "correlations"
+                                ]
+                                if item["correlation"] is not None
+                            ]
+
+                            if valid_correlation_rows:
+                                st.write(
+                                    "**Feature-to-Target Correlation Heatmap**"
                                 )
-                            )
 
-                            sns.heatmap(
-                                heatmap_data,
-                                annot=True,
-                                fmt=".2f",
-                                cmap="coolwarm",
-                                center=0,
-                                vmin=-1,
-                                vmax=1,
-                                ax=axis,
-                            )
+                                heatmap_data = pd.DataFrame(
+                                    {
+                                        item["feature"]: [
+                                            item["correlation"]
+                                        ]
+                                        for item in valid_correlation_rows
+                                    },
+                                    index=[target_column],
+                                )
 
-                            axis.set_xlabel("Numerical Features")
-                            axis.set_ylabel("Target")
-                            axis.set_title(
-                                "Numerical Feature-to-Target Correlations"
-                            )
+                                figure, axis = plt.subplots(
+                                    figsize=(
+                                        max(
+                                            6,
+                                            len(valid_correlation_rows) * 1.2,
+                                        ),
+                                        1.8,
+                                    )
+                                )
 
-                            figure.tight_layout()
+                                sns.heatmap(
+                                    heatmap_data,
+                                    annot=True,
+                                    fmt=".2f",
+                                    cmap="coolwarm",
+                                    center=0,
+                                    vmin=-1,
+                                    vmax=1,
+                                    ax=axis,
+                                )
 
-                            st.pyplot(figure)
+                                axis.set_xlabel("Numerical Features")
+                                axis.set_ylabel("Target")
+                                axis.set_title(
+                                    "Numerical Feature-to-Target Correlations"
+                                )
 
-                            plt.close(figure)
+                                figure.tight_layout()
+
+                                st.pyplot(figure)
+
+                                plt.close(figure)
+                            else:
+                                st.info(
+                                    "No valid correlations are available "
+                                    "for visualization."
+                                )
+
                         else:
                             st.info(
-                                "No valid correlations are available "
-                                "for visualization."
+                                "No numerical feature columns are available "
+                                "for correlation analysis."
                             )
 
-                    else:
+                        st.write(
+                            "**Proxy Feature Candidate Assessment**"
+                        )
+
+                        candidate_count = (
+                            proxy_candidate_result["candidate_count"]
+                        )
+
+                        if candidate_count > 0:
+                            st.warning(
+                                f"{candidate_count} possible proxy leakage "
+                                "candidate(s) identified."
+                            )
+
+                            for candidate in (
+                                proxy_candidate_result["candidates"]
+                            ):
+                                st.write(
+                                    f"**{candidate['feature']}**"
+                                )
+
+                                st.write(
+                                    "Correlation:",
+                                    round(
+                                        candidate["correlation"],
+                                        4,
+                                    ),
+                                )
+
+                                st.write(
+                                    candidate["reason"]
+                                )
+
+                        else:
+                            st.success(
+                                "No proxy leakage candidates were identified "
+                                "using the current correlation threshold."
+                            )
+
+                        st.write(
+                            "**Correlation Threshold:**",
+                            proxy_candidate_result[
+                                "correlation_threshold"
+                            ],
+                        )
+
                         st.info(
-                            "No numerical feature columns are available "
-                            "for correlation analysis."
+                            proxy_candidate_result["warning"]
                         )
+
+                with report_tab:
+                    st.subheader("Structured Analysis Report")
+
+                    report = build_analysis_report(
+                        dataset_name=uploaded_file.name,
+                        profile=profile,
+                        config=config,
+                        cv_strategy=cv_strategy,
+                        preprocessing_steps=preprocessing_steps,
+                        overall_risk_result=overall_risk_result,
+                        diagnostic_result=diagnostic_result,
+                        diagnostic_error=diagnostic_error,
+                        comparison_result=comparison_result,
+                        comparison_error=comparison_error,
+                        selected_leakage_features=selected_leakage_features,
+                    )
+
+                    report_json = report_to_json(report)
 
                     st.write(
-                        "**Proxy Feature Candidate Assessment**"
+                        "Download the analysis findings, risk assessment, "
+                        "configuration, and diagnostic results as JSON."
                     )
 
-                    candidate_count = (
-                        proxy_candidate_result["candidate_count"]
+                    st.download_button(
+                        label="Download Analysis Report (JSON)",
+                        data=report_json,
+                        file_name="data_leakage_analysis_report.json",
+                        mime="application/json",
+                        on_click="ignore",
                     )
 
-                    if candidate_count > 0:
-                        st.warning(
-                            f"{candidate_count} possible proxy leakage "
-                            "candidate(s) identified."
-                        )
+                with statistics_tab:
+                    st.subheader("Column Statistics")
 
-                        for candidate in (
-                            proxy_candidate_result["candidates"]
-                        ):
-                            st.write(
-                                f"**{candidate['feature']}**"
-                            )
+                    st.write("**Numerical Statistics**")
+                    st.json(statistics["numerical"])
 
-                            st.write(
-                                "Correlation:",
-                                round(
-                                    candidate["correlation"],
-                                    4,
-                                ),
-                            )
+                    st.write("**Categorical Statistics**")
+                    st.json(statistics["categorical"])
 
-                            st.write(
-                                candidate["reason"]
-                            )
-
-                    else:
-                        st.success(
-                            "No proxy leakage candidates were identified "
-                            "using the current correlation threshold."
-                        )
-
-                    st.write(
-                        "**Correlation Threshold:**",
-                        proxy_candidate_result[
-                            "correlation_threshold"
-                        ],
-                    )
-
-                    st.info(
-                        proxy_candidate_result["warning"]
-                    )
-                
-                st.subheader("Structured Analysis Report")
-
-                report = build_analysis_report(
-                    dataset_name=uploaded_file.name,
-                    profile=profile,
-                    config=config,
-                    cv_strategy=cv_strategy,
-                    preprocessing_steps=preprocessing_steps,
-                    overall_risk_result=overall_risk_result,
-                    diagnostic_result=diagnostic_result,
-                    diagnostic_error=diagnostic_error,
-                    comparison_result=comparison_result,
-                    comparison_error=comparison_error,
-                    selected_leakage_features=selected_leakage_features,
-                )
-
-                report_json = report_to_json(report)
-
-                st.write(
-                    "Download the analysis findings, risk assessment, "
-                    "configuration, and diagnostic results as JSON."
-                )
-
-                st.download_button(
-                    label="Download Analysis Report (JSON)",
-                    data=report_json,
-                    file_name="data_leakage_analysis_report.json",
-                    mime="application/json",
-                    on_click="ignore",
-                )
-                    
-                st.subheader("Column Statistics")
-
-                st.write("**Numerical Statistics**")
-                st.json(statistics["numerical"])
-
-                st.write("**Categorical Statistics**")
-                st.json(statistics["categorical"])
-                
-                show_feature_distributions(df)
+                    show_feature_distributions(df)
 
             except ValueError as e:
                 st.error(str(e))
